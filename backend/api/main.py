@@ -161,15 +161,13 @@ async def favicon():
 @app.api_route("/sms/webhook", methods=["GET", "POST"], status_code=status.HTTP_200_OK)
 async def sms_webhook(request: Request):
     """
-    Webhook receiver endpoint for Textbee SMS delivery reports and callbacks.
-    Verifies signature if TEXTBEE_SIGNING_SECRET is configured.
+    Webhook receiver endpoint for SMS Gate (sms-gate.app) / SMS provider delivery reports and callbacks.
     """
     try:
-        signing_secret = os.getenv("TEXTBEE_SIGNING_SECRET", "")
         signature_header = (
             request.headers.get("x-signature")
-            or request.headers.get("x-textbee-signature")
             or request.headers.get("authorization")
+            or request.headers.get("x-sms-gate-signature")
         )
 
         payload = {}
@@ -182,8 +180,8 @@ async def sms_webhook(request: Request):
         else:
             payload = dict(request.query_params)
         
-        logger.info(f"Textbee Webhook Event Received (Signature: {signature_header}): {payload}")
-        return {"status": "success", "message": "Webhook processed successfully", "data": payload}
+        logger.info(f"SMS Gate Webhook Event Received (Header: {signature_header}): {payload}")
+        return {"status": "success", "message": "SMS Webhook processed successfully", "data": payload}
     except Exception as e:
         logger.warning(f"SMS Webhook processing notice: {e}")
         return {"status": "success", "message": "Webhook received"}
@@ -262,7 +260,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     sms_gate_pass = os.getenv("SMS_GATE_PASSWORD", "")
     sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "")
 
-    # Fallback Textbee credentials
+    # Fallback credentials
     textbee_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
     textbee_device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
 
@@ -306,7 +304,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                 detail="Network failure connecting to SMS Gateway service."
             )
     elif textbee_api_key and textbee_device_id:
-        provider_used = "Textbee API"
+        provider_used = "Textbee API (Fallback)"
         import httpx
         textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device_id}/send-sms"
         headers = {"Content-Type": "application/json", "x-api-key": textbee_api_key}
@@ -317,14 +315,14 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                 if not 200 <= resp.status_code < 300:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Textbee rejected OTP request ({resp.status_code})."
+                        detail=f"Fallback provider rejected OTP request ({resp.status_code})."
                     )
         except Exception as err:
             if isinstance(err, HTTPException):
                 raise err
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Network failure connecting to Textbee service."
+                detail="Network failure connecting to fallback SMS service."
             )
     else:
         logger.error("No valid SMS Gateway credentials configured in server environment.")
@@ -352,7 +350,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                 "verified": False,
                 "provider": provider_used
             })
-            logger.info(f"Saved 5-minute OTP for {formatted_phone} in Firestore 'otps' collection")
+            logger.info(f"Saved 5-minute OTP for {formatted_phone} in Firestore 'otps' collection via {provider_used}")
         except Exception as fs_err:
             logger.warning(f"Firestore OTP document write error: {fs_err}")
 
@@ -373,8 +371,9 @@ async def send_sms_otp_info():
     return {
         "success": True,
         "status": "ready",
-        "message": "SMS OTP endpoint is active. Use POST /sms/send-otp with JSON body to send an OTP.",
+        "message": "SMS Gate OTP endpoint is active. Use POST /sms/send-otp with JSON body to send an OTP.",
         "method": "POST",
+        "gateway": "SMS Gateway for Android (https://sms-gate.app)",
         "body_example": {
             "phone": "+919876543210"
         },
