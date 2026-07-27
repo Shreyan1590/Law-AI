@@ -76,15 +76,20 @@ class AuthService {
           googleName = userCredential.user!.displayName;
         }
       } else {
-        await GoogleSignIn.instance.initialize(
-          serverClientId: _webClientId,
-        );
+        try {
+          await GoogleSignIn.instance.initialize(
+            serverClientId: _webClientId,
+          );
+        } catch (_) {}
 
         GoogleSignInAccount? googleUser;
         try {
           googleUser = await GoogleSignIn.instance.authenticate();
         } catch (authErr) {
           debugPrint('Google authenticate initial notice: $authErr');
+        }
+
+        if (googleUser == null) {
           try {
             await GoogleSignIn.instance.signOut();
             googleUser = await GoogleSignIn.instance.authenticate();

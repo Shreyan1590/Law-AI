@@ -233,15 +233,17 @@ async def send_sms_otp(request: SendOtpRequest):
         logger.warning("TEXTBEE_API_KEY is not set in environment variables. OTP stored locally.")
         return {
             "success": True,
-            "message": "OTP generated successfully",
+            "message": "OTP generated locally (TEXTBEE_API_KEY missing in server env)",
             "phone": formatted_phone,
             "verification_id": f"vid_{formatted_phone}"
         }
 
     # Dispatch HTTP POST request to Textbee SMS API
+    dispatch_success = False
+    error_detail = ""
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=12.0) as client:
             textbee_url = (
                 f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
                 if device_id
@@ -257,12 +259,17 @@ async def send_sms_otp(request: SendOtpRequest):
             }
             resp = await client.post(textbee_url, headers=headers, json=payload)
             logger.info(f"Textbee SMS API dispatch status: {resp.status_code}, response: {resp.text}")
+            if resp.status_code in (200, 201):
+                dispatch_success = True
+            else:
+                error_detail = f"Textbee returned status {resp.status_code}: {resp.text}"
     except Exception as e:
         logger.warning(f"Textbee SMS dispatch notice: {e}")
+        error_detail = str(e)
 
     return {
         "success": True,
-        "message": "OTP sent successfully via Textbee",
+        "message": "OTP sent successfully via Textbee" if dispatch_success else f"OTP generated (Textbee dispatch notice: {error_detail})",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}"
     }
