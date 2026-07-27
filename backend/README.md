@@ -16,6 +16,7 @@ Ensure you have **Python 3.10+** installed on your system.
 Create a file named `.env` in the `backend/` directory:
 ```env
 GOOGLE_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
 TEXTBEE_API_KEY=your_textbee_api_key_here
 TEXTBEE_DEVICE_ID=your_textbee_device_id_here
 ```

@@ -14,7 +14,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import json
 from rag_pipeline.retriever import retrieve
-from rag_pipeline.generator import generate_answer
+from rag_pipeline.generator import generate_answer, should_answer_without_retrieval
 from rag_pipeline.d1_client import D1Client
 
 # Initialize D1 Client
@@ -395,8 +395,12 @@ async def ask_question(request: AskRequest, raw_request: Request):
     d1_binding = getattr(env, "DB", None) if env else None
     
     try:
-        # 1. Retrieve top 4 context documents (await since retriever is now async)
-        retrieved_docs = await retrieve(question, k=4, d1_binding=d1_binding)
+        # 1. Retrieve context documents unless this is clearly friendly/general chat.
+        # Exact Article requests are handled inside retrieve() and return only the requested Article(s).
+        if should_answer_without_retrieval(question):
+            retrieved_docs = []
+        else:
+            retrieved_docs = await retrieve(question, k=8, d1_binding=d1_binding)
         
         # 2. Extract article numbers for logging
         cited_articles_metadata = []

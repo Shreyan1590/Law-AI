@@ -26,12 +26,15 @@ class _ChatScreenState extends State<ChatScreen> {
     // Add introductory message from the legal assistant
     _messages.add(
       ChatMessage(
-        text: "### Welcome to Arasamaippu AI.\n\n"
-            "How can I help you find constitutional provisions today?\n\n"
+        text:
+            "### Welcome to Arasamaippu AI\n\n"
+            "Ask me about the **Constitution of India**, a specific Article, or even a general doubt. "
+            "I'll keep it friendly, clear, and useful.\n\n"
             "**Examples:**\n"
-            "• 'What is Article 21?'\n"
-            "• 'What are my fundamental rights?'\n"
-            "• 'Is primary education a right?'",
+            "- \"What is Article 21?\"\n"
+            "- \"Which Articles match right to equality?\"\n"
+            "- \"Explain my doubt about Article 19.\"\n"
+            "- \"Give me a simple explanation of democracy.\"",
         isUser: false,
         timestamp: DateTime.now(),
       ),
@@ -52,7 +55,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _handleSubmitted(String text) async {
     if (text.trim().isEmpty) return;
-    
+
     _textController.clear();
     final userMessage = ChatMessage(
       text: text,
@@ -85,7 +88,9 @@ class _ChatScreenState extends State<ChatScreen> {
           text: response['answer'] as String,
           isUser: false,
           citations: response['citations'] as List<String>,
-          retrievedArticles: List<Map<String, String>>.from(response['retrieved_articles'] ?? []),
+          retrievedArticles: List<Map<String, String>>.from(
+            response['retrieved_articles'] ?? [],
+          ),
           timestamp: DateTime.now(),
         ),
       );
@@ -99,33 +104,41 @@ class _ChatScreenState extends State<ChatScreen> {
         query: text,
         answer: response['answer'] as String,
         citations: response['citations'] as List<String>,
-        retrievedArticles: List<Map<String, String>>.from(response['retrieved_articles'] ?? []),
+        retrievedArticles: List<Map<String, String>>.from(
+          response['retrieved_articles'] ?? [],
+        ),
       );
     }
   }
 
   /// Displays the raw, original text of the retrieved constitutional provision in a modal dialog.
-  void _showArticleDialog(BuildContext context, String citation, List<Map<String, String>> articles) {
+  void _showArticleDialog(
+    BuildContext context,
+    String citation,
+    List<Map<String, String>> articles,
+  ) {
     // Extract digit number from citation string (e.g. "Article 14" -> "14")
     final match = RegExp(r'\d+[A-Z]?').firstMatch(citation);
     final number = match != null ? match.group(0) : '';
-    
+
     // Find the matching cached article detail
     final article = articles.firstWhere(
       (element) => element['number'] == number,
       orElse: () => <String, String>{},
     );
-    
+
     if (article.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Original text for $citation is not cached in this response.'),
+          content: Text(
+            'Original text for $citation is not cached in this response.',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -140,7 +153,10 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: Text(
                   'Article ${article['number']}: ${article['title']}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -166,7 +182,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ],
                   Text(
                     article['content']!,
-                    style: const TextStyle(fontSize: 15, height: 1.45, color: Colors.black87),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      color: Colors.black87,
+                    ),
                   ),
                 ],
               ),
@@ -189,14 +209,17 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Row(
           children: [
             AppLogo(size: 28, showShadow: false),
             SizedBox(width: 10),
-            Text('Arasamaippu AI', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Arasamaippu AI',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         elevation: 2,
@@ -216,7 +239,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          
+
           // Loading Indicator
           if (_isLoading)
             const Padding(
@@ -234,16 +257,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   SizedBox(width: 10),
                   Text(
-                    'Searching constitutional text...',
+                    'Thinking clearly...',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
             ),
-            
+
           // Input field and send button
           _buildInputArea(theme),
-          
+
           // Persistent legal disclaimer footer
           _buildDisclaimerFooter(theme),
         ],
@@ -253,11 +276,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageBubble(ChatMessage message, ThemeData theme) {
     final isUser = message.isUser;
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -266,8 +291,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 // Render citation chips above response bubble if any exist (Clickable to redirect/inspect)
                 if (!isUser && message.citations.isNotEmpty) ...[
@@ -277,7 +303,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       spacing: 4.0,
                       children: message.citations.map((citation) {
                         return ActionChip(
-                          labelPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          labelPadding: const EdgeInsets.symmetric(
+                            horizontal: 4.0,
+                          ),
                           visualDensity: VisualDensity.compact,
                           backgroundColor: Colors.amber.shade100,
                           side: BorderSide(color: Colors.amber.shade300),
@@ -289,16 +317,23 @@ class _ChatScreenState extends State<ChatScreen> {
                               color: Colors.amber.shade900,
                             ),
                           ),
-                          onPressed: () => _showArticleDialog(context, citation, message.retrievedArticles),
+                          onPressed: () => _showArticleDialog(
+                            context,
+                            citation,
+                            message.retrievedArticles,
+                          ),
                         );
                       }).toList(),
                     ),
                   ),
                 ],
-                
+
                 // Actual message text bubble (renders Markdown for AI/Backend responses)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14.0,
+                    vertical: 10.0,
+                  ),
                   decoration: BoxDecoration(
                     color: isUser ? theme.primaryColor : Colors.grey.shade100,
                     borderRadius: BorderRadius.only(
@@ -339,7 +374,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               height: 1.5,
                             ),
                             h4: const TextStyle(
-                              color: Color(0xFF1E3A8A), // Indigo for Article numbers
+                              color: Color(
+                                0xFF1E3A8A,
+                              ), // Indigo for Article numbers
                               fontSize: 15.0,
                               fontWeight: FontWeight.bold,
                               height: 1.4,
@@ -377,9 +414,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade200),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
       child: SafeArea(
@@ -391,8 +426,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: _isLoading ? null : _handleSubmitted,
                 decoration: InputDecoration(
-                  hintText: 'Ask about the Indian Constitution...',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                  hintText:
+                      'Ask about Articles, doubts, or anything general...',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 10.0,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24.0),
                     borderSide: BorderSide(color: Colors.grey.shade300),
@@ -403,7 +442,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24.0),
-                    borderSide: BorderSide(color: theme.primaryColor, width: 1.5),
+                    borderSide: BorderSide(
+                      color: theme.primaryColor,
+                      width: 1.5,
+                    ),
                   ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
@@ -431,19 +473,13 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade200),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
       child: const Text(
         'Disclaimer: This app provides informational summaries of the Constitution of India '
         'and does not constitute official legal advice. Always consult a qualified advocate.',
         textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 10.0,
-          color: Colors.grey,
-          height: 1.25,
-        ),
+        style: TextStyle(fontSize: 10.0, color: Colors.grey, height: 1.25),
       ),
     );
   }

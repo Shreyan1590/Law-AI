@@ -18,6 +18,54 @@ _embeddings = None
 _vector_store = None
 _d1_client = None
 
+ARTICLE_REFERENCE_PATTERN = re.compile(
+    r'\b(?:article\s+number|article\s+no\.?|article|articles|art\.?|arts\.?)\s*(\d+[A-Z]?)\b',
+    re.IGNORECASE,
+)
+
+def extract_article_numbers(query: str) -> list[str]:
+    """
+    Returns explicitly mentioned Article numbers in user order.
+    Example: "Articles 14 and 21" -> ["14", "21"].
+    """
+    seen = set()
+    article_numbers = []
+
+    def add_number(raw_number: str) -> None:
+        number = raw_number.upper()
+        if number not in seen:
+            seen.add(number)
+            article_numbers.append(number)
+
+    standalone_number = re.fullmatch(r'\s*(\d{1,3}[A-Z]?)\s*', query)
+    if standalone_number:
+        return [standalone_number.group(1).upper()]
+    for match in ARTICLE_REFERENCE_PATTERN.finditer(query):
+        add_number(match.group(1))
+
+        tail = query[match.end():]
+        offset = 0
+        while True:
+            extra = re.match(r'\s*(?:,|and|&)\s*(\d{1,3}[A-Z]?)\b', tail[offset:], re.IGNORECASE)
+            if not extra:
+                break
+            add_number(extra.group(1))
+            offset += extra.end()
+
+    return article_numbers
+
+def _format_article_row(row) -> dict:
+    return {
+        "content": row["content"],
+        "metadata": {
+            "number": str(row["number"]),
+            "title": row["title"],
+            "part": row["part"],
+            "type": row["type"]
+        },
+        "score": 1.0
+    }
+
 def get_d1_client():
     global _d1_client
     if _d1_client is None:
@@ -54,42 +102,31 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
     If running inside Cloudflare Workers (d1_binding provided), queries D1 natively using SQL.
     Otherwise, uses the local Chroma DB + D1 REST API client fallback.
     """
-    exact_article_doc = None
-    match = re.search(r'\b(?:article|art\.?|section)\s*(\d+[A-Z]?)\b', query, re.IGNORECASE)
+    article_numbers = extract_article_numbers(query)
 
     # ----------------------------------------------------
     # Case A: Running inside Cloudflare Worker (d1_binding active)
     # ----------------------------------------------------
     if d1_binding is not None:
         print("Using native Cloudflare D1 worker binding for retrieval.")
-        # 1. Exact match query
-        if match:
-            target_number = match.group(1)
+
+        if article_numbers:
+            exact_article_docs = []
             try:
-                sql = "SELECT number, title, part, content, type FROM articles WHERE number = ? AND type = 'article' LIMIT 1"
-                resp = await d1_binding.prepare(sql).bind(str(target_number)).all()
-                rows = resp.results
-                if hasattr(rows, "to_py"):
-                    rows = rows.to_py()
-                if rows:
-                    row = rows[0]
-                    exact_article_doc = {
-                        "content": row["content"],
-                        "metadata": {
-                            "number": row["number"],
-                            "title": row["title"],
-                            "part": row["part"],
-                            "type": row["type"]
-                        },
-                        "score": 1.0
-                    }
+                for target_number in article_numbers:
+                    sql = "SELECT number, title, part, content, type FROM articles WHERE number = ? AND type = 'article' LIMIT 1"
+                    resp = await d1_binding.prepare(sql).bind(str(target_number)).all()
+                    rows = resp.results
+                    if hasattr(rows, "to_py"):
+                        rows = rows.to_py()
+                    if rows:
+                        exact_article_docs.append(_format_article_row(rows[0]))
             except Exception as e:
                 print(f"Worker D1 exact match query failed: {e}")
+            return exact_article_docs
 
         # 2. Keyword fallback query (Edge-compatible keyword search)
         formatted_results = []
-        if exact_article_doc:
-            formatted_results.append(exact_article_doc)
 
         try:
             keywords = [w.strip() for w in re.split(r'\W+', query) if len(w.strip()) > 3]
@@ -109,10 +146,6 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
                     rows = rows.to_py()
 
                 for row in rows:
-                    doc_num = row["number"]
-                    # Skip duplication of exact match
-                    if exact_article_doc and doc_num == exact_article_doc["metadata"]["number"]:
-                        continue
                     formatted_results.append({
                         "content": row["content"],
                         "metadata": {
@@ -131,57 +164,54 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
     # ----------------------------------------------------
     # Case B: Local Development / Render (HTTP REST D1 API)
     # ----------------------------------------------------
-    db = get_vector_store()
     d1 = get_d1_client()
     
-    # 1. Try D1 exact match first if configured
-    if match and d1.is_configured():
-        target_number = match.group(1)
-        print(f"Detected exact article query for: 'Article {target_number}'")
+    # 1. Exact Article requests must return only the requested Article(s).
+    if article_numbers:
+        exact_article_docs = []
+        print(f"Detected exact article query for: {', '.join('Article ' + n for n in article_numbers)}")
+
         try:
-            sql = "SELECT number, title, part, content, type FROM articles WHERE number = ? AND type = 'article' LIMIT 1"
-            rows = d1.execute(sql, [str(target_number)])
-            if rows:
-                row = rows[0]
-                exact_article_doc = {
-                    "content": row["content"],
-                    "metadata": {
-                        "number": row["number"],
-                        "title": row["title"],
-                        "part": row["part"],
-                        "type": row["type"]
-                    },
-                    "score": 1.0
-                }
-                print(f"D1 Exact match found for Article {target_number}!")
+            if d1.is_configured():
+                for target_number in article_numbers:
+                    sql = "SELECT number, title, part, content, type FROM articles WHERE number = ? AND type = 'article' LIMIT 1"
+                    rows = d1.execute(sql, [str(target_number)])
+                    if rows:
+                        exact_article_docs.append(_format_article_row(rows[0]))
+                        print(f"D1 exact match found for Article {target_number}!")
         except Exception as e:
             print(f"Warning: D1 exact match query failed: {e}")
-            
-    # Fallback to Chroma exact match if D1 is not configured or failed
-    if match and not exact_article_doc:
-        target_number = match.group(1)
-        try:
-            exact_docs = db.get(
-                where={
-                    "$and": [
-                        {"number": {"$eq": str(target_number)}},
-                        {"type": {"$eq": "article"}}
-                    ]
-                }
-            )
-            if exact_docs and exact_docs.get("documents"):
-                doc_content = exact_docs["documents"][0]
-                doc_meta = exact_docs["metadatas"][0]
-                exact_article_doc = {
-                    "content": doc_content,
-                    "metadata": doc_meta,
-                    "score": 1.0
-                }
-                print(f"Chroma Exact match found for Article {target_number}!")
-        except Exception as e:
-            print(f"Warning: Chroma exact match query failed: {e}")
+
+        found_numbers = {str(doc["metadata"].get("number")) for doc in exact_article_docs}
+        missing_numbers = [target_number for target_number in article_numbers if target_number not in found_numbers]
+        if missing_numbers:
+            try:
+                db = get_vector_store()
+                for target_number in missing_numbers:
+                    exact_docs = db.get(
+                        where={
+                            "$and": [
+                                {"number": {"$eq": str(target_number)}},
+                                {"type": {"$eq": "article"}}
+                            ]
+                        }
+                    )
+                    if exact_docs and exact_docs.get("documents"):
+                        doc_content = exact_docs["documents"][0]
+                        doc_meta = exact_docs["metadatas"][0]
+                        exact_article_docs.append({
+                            "content": doc_content,
+                            "metadata": doc_meta,
+                            "score": 1.0
+                        })
+                        print(f"Chroma exact match found for Article {target_number}!")
+            except Exception as e:
+                print(f"Warning: Chroma exact match query failed: {e}")
+
+        return exact_article_docs
             
     # 2. Similarity search using Chroma
+    db = get_vector_store()
     try:
         results = db.similarity_search_with_relevance_scores(query, k=k)
     except Exception as e:
@@ -191,16 +221,16 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
         
     formatted_results = []
     
-    if exact_article_doc:
-        formatted_results.append(exact_article_doc)
-        
+    seen_docs = set()
+
     for doc, score in results:
         doc_num = doc.metadata.get("number")
         doc_type = doc.metadata.get("type")
-        
-        # Avoid duplicating exact match
-        if exact_article_doc and doc_num == exact_article_doc["metadata"].get("number") and doc_type == exact_article_doc["metadata"].get("type"):
+
+        doc_key = (str(doc_num), str(doc_type))
+        if doc_key in seen_docs:
             continue
+        seen_docs.add(doc_key)
             
         # Fetch from D1 if configured, fallback to Chroma document content
         content = doc.page_content
