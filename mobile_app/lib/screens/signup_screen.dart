@@ -20,7 +20,7 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
 
@@ -29,10 +29,10 @@ class _SignupScreenState extends State<SignupScreen>
   late TextEditingController _phoneController;
   final TextEditingController _smsCodeController = TextEditingController();
 
-  late TabController _tabController;
   late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
 
+  String _selectedMethod = 'google'; // 'google' or 'phone'
   bool _isLoading = false;
   bool _authenticated = false;
   bool _phoneCodeSent = false;
@@ -42,8 +42,6 @@ class _SignupScreenState extends State<SignupScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -68,7 +66,6 @@ class _SignupScreenState extends State<SignupScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _pulseController.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -237,7 +234,7 @@ class _SignupScreenState extends State<SignupScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Modern off-white theme
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text('Register Profile', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
@@ -255,7 +252,7 @@ class _SignupScreenState extends State<SignupScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // App Logo Header
+                  // App Logo Header with Official Arasamaippu AI Logo
                   Center(
                     child: Column(
                       children: [
@@ -272,7 +269,7 @@ class _SignupScreenState extends State<SignupScreen>
                                 )
                               ],
                             ),
-                            child: const AppLogo(size: 76),
+                            child: const AppLogo(size: 80),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -288,7 +285,7 @@ class _SignupScreenState extends State<SignupScreen>
                         Text(
                           _authenticated
                               ? 'Set your display name to complete database setup.'
-                              : 'Select your preferred verification method to get started.',
+                              : 'Select your registration method below to get started.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
@@ -327,7 +324,7 @@ class _SignupScreenState extends State<SignupScreen>
                   ],
 
                   if (!_authenticated) ...[
-                    // Step 1: Verification Card with Tab Switcher
+                    // Step 1: Dropdown Method Switcher Card
                     Card(
                       elevation: 2,
                       shadowColor: Colors.black.withAlpha(15),
@@ -337,49 +334,98 @@ class _SignupScreenState extends State<SignupScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Segmented Method Selector Tabs
+                            // 1. Select Dropdown Title
+                            const Text(
+                              'Choose method to register',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // 2. Modern Dropdown Select Field
                             Container(
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: TabBar(
-                                controller: _tabController,
-                                indicator: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  color: Colors.white,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(20),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    )
-                                  ],
-                                ),
-                                labelColor: theme.primaryColor,
-                                unselectedLabelColor: Colors.grey.shade600,
-                                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                dividerColor: Colors.transparent,
-                                tabs: const [
-                                  Tab(
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        GoogleLogo(size: 16),
-                                        SizedBox(width: 6),
-                                        Text('Google'),
-                                      ],
-                                    ),
+                                border: Border.all(color: theme.primaryColor.withAlpha(40)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha(10),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  Tab(
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.phone_android, size: 16),
-                                        SizedBox(width: 6),
-                                        Text('Phone SMS'),
-                                      ],
+                                ],
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedMethod,
+                                  isExpanded: true,
+                                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: theme.primaryColor, size: 28),
+                                  dropdownColor: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: 'google',
+                                      child: Row(
+                                        children: [
+                                          const GoogleLogo(size: 18),
+                                          const SizedBox(width: 12),
+                                          const Text('Google Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        ],
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'phone',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.phone_android_rounded, size: 18, color: theme.primaryColor),
+                                          const SizedBox(width: 12),
+                                          const Text('Phone SMS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedMethod = value;
+                                        _errorMessage = null;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // 3. Status Badge: "Selected: Google Account" or "Selected: Phone SMS"
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: theme.primaryColor.withAlpha(15),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: theme.primaryColor.withAlpha(40)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _selectedMethod == 'google' ? Icons.check_circle_rounded : Icons.phone_android_rounded,
+                                    size: 18,
+                                    color: theme.primaryColor,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Selected: ${_selectedMethod == "google" ? "Google Account" : "Phone SMS"}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: theme.primaryColor,
                                     ),
                                   ),
                                 ],
@@ -387,173 +433,158 @@ class _SignupScreenState extends State<SignupScreen>
                             ),
                             const SizedBox(height: 20),
 
-                            // Tab View Container
-                            SizedBox(
-                              height: _phoneCodeSent ? 160 : 130,
-                              child: TabBarView(
-                                controller: _tabController,
-                                physics: const NeverScrollableScrollPhysics(),
+                            // 4. Verification Form Area based on selected method
+                            if (_selectedMethod == 'google') ...[
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  // Tab 1: Google Account Verification
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      const Text(
-                                        'Verify identity quickly using Google Account.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _isLoading
-                                          ? const Center(child: CircularProgressIndicator())
-                                          : ElevatedButton.icon(
-                                              onPressed: _verifyWithGoogle,
-                                              icon: const GoogleLogo(size: 18),
-                                              label: const Text('Verify Google Account', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.white,
-                                                foregroundColor: Colors.black87,
-                                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                                elevation: 1,
-                                                side: BorderSide(color: Colors.grey.shade300),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              ),
-                                            ),
-                                    ],
+                                  const Text(
+                                    'Verify your identity instantly using your Google Account.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey),
                                   ),
-
-                                  // Tab 2: Phone SMS Verification
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (!_phoneCodeSent) ...[
-                                        TextFormField(
-                                          controller: _phoneController,
-                                          keyboardType: TextInputType.phone,
-                                          maxLength: 10,
-                                          decoration: InputDecoration(
-                                            labelText: 'Mobile Number',
-                                            hintText: '9876543210',
-                                            counterText: '',
-                                            prefixIcon: const Padding(
-                                              padding: EdgeInsets.symmetric(horizontal: 12.0),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.phone_outlined, size: 20, color: Colors.black54),
-                                                  SizedBox(width: 6),
-                                                  Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                                                  SizedBox(width: 4),
-                                                  Text(
-                                                    '+91 ',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 15,
-                                                      color: Colors.black87,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  const SizedBox(height: 16),
+                                  _isLoading
+                                      ? const Center(child: CircularProgressIndicator())
+                                      : ElevatedButton.icon(
+                                          onPressed: _verifyWithGoogle,
+                                          icon: const GoogleLogo(size: 18),
+                                          label: const Text('Verify Google Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.white,
+                                            foregroundColor: Colors.black87,
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            elevation: 1,
+                                            side: BorderSide(color: Colors.grey.shade300),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                           ),
                                         ),
-                                        const SizedBox(height: 12),
-                                        _isLoading
-                                            ? const Center(child: CircularProgressIndicator())
-                                            : ElevatedButton(
-                                                onPressed: _verifySendPhoneCode,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: theme.primaryColor,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                ),
-                                                child: const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              ),
-                                      ] else ...[
-                                        // Editable Phone Number Banner Above OTP Field
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: theme.primaryColor.withAlpha(20),
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: theme.primaryColor.withAlpha(51)),
+                                ],
+                              ),
+                            ] else ...[
+                              // Phone SMS Verification
+                              if (!_phoneCodeSent) ...[
+                                TextFormField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  maxLength: 10,
+                                  decoration: InputDecoration(
+                                    labelText: 'Mobile Number',
+                                    hintText: '9876543210',
+                                    counterText: '',
+                                    prefixIcon: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 12.0),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.phone_outlined, size: 20, color: Colors.black54),
+                                          SizedBox(width: 6),
+                                          Text('🇮🇳', style: TextStyle(fontSize: 18)),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            '+91 ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                              color: Colors.black87,
+                                            ),
                                           ),
+                                        ],
+                                      ),
+                                    ),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _isLoading
+                                    ? const Center(child: CircularProgressIndicator())
+                                    : ElevatedButton(
+                                        onPressed: _verifySendPhoneCode,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: theme.primaryColor,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                              ] else ...[
+                                // Editable Phone Banner Above OTP Field
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: theme.primaryColor.withAlpha(20),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: theme.primaryColor.withAlpha(51)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.phone_android, size: 18, color: theme.primaryColor),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'OTP sent to +91 ${_phoneController.text.trim()}',
+                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _phoneCodeSent = false;
+                                            _smsCodeController.clear();
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(4.0),
                                           child: Row(
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(Icons.phone_android, size: 18, color: theme.primaryColor),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  'OTP sent to +91 ${_phoneController.text.trim()}',
-                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                                ),
-                                              ),
-                                              InkWell(
-                                                onTap: () {
-                                                  setState(() {
-                                                    _phoneCodeSent = false;
-                                                    _smsCodeController.clear();
-                                                  });
-                                                },
-                                                borderRadius: BorderRadius.circular(6),
-                                                child: Padding(
-                                                  padding: const EdgeInsets.all(4.0),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Icon(Icons.edit_outlined, size: 16, color: theme.primaryColor),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        'Edit',
-                                                        style: TextStyle(
-                                                          color: theme.primaryColor,
-                                                          fontWeight: FontWeight.bold,
-                                                          fontSize: 13,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
+                                              Icon(Icons.edit_outlined, size: 16, color: theme.primaryColor),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Edit',
+                                                style: TextStyle(
+                                                  color: theme.primaryColor,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 12),
-                                        TextFormField(
-                                          controller: _smsCodeController,
-                                          keyboardType: TextInputType.number,
-                                          maxLength: 6,
-                                          decoration: InputDecoration(
-                                            labelText: '6-digit SMS Code',
-                                            hintText: 'Enter 6-digit code',
-                                            counterText: '',
-                                            prefixIcon: const Icon(Icons.lock_clock_outlined),
-                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        _isLoading
-                                            ? const Center(child: CircularProgressIndicator())
-                                            : ElevatedButton(
-                                                onPressed: _verifyPhoneCode,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: theme.primaryColor,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                ),
-                                                child: const Text('Confirm Code', style: TextStyle(fontWeight: FontWeight.bold)),
-                                              ),
-                                      ],
+                                      ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: _smsCodeController,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 6,
+                                  decoration: InputDecoration(
+                                    labelText: '6-digit SMS Code',
+                                    hintText: 'Enter 6-digit code',
+                                    counterText: '',
+                                    prefixIcon: const Icon(Icons.lock_clock_outlined),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _isLoading
+                                    ? const Center(child: CircularProgressIndicator())
+                                    : ElevatedButton(
+                                        onPressed: _verifyPhoneCode,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: theme.primaryColor,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: const Text('Confirm Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                              ],
+                            ],
                           ],
                         ),
                       ),
