@@ -3,13 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  // Replace this with your Render deployment URL once deployed (e.g., https://your-app.onrender.com).
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:8000'; // Local PC address for Chrome Web
-    }
-    return 'http://10.0.2.2:8000'; // Special redirect to local PC for Android Emulator
-  }
+  // Live Render Backend Deployment URL
+  static String get baseUrl => 'https://arasamaippu-ai-backend.onrender.com';
 
   /// Sends a question to the backend FastAPI server `/ask` endpoint.
   Future<Map<String, dynamic>> askQuestion(String question, {String? email}) async {
