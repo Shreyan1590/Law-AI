@@ -211,6 +211,23 @@ class VerifyOtpRequest(BaseModel):
     phone: str = Field(..., description="Mobile number formatted with +91")
     otp: str = Field(..., description="6-digit OTP code")
 
+@app.get("/sms/send-otp", status_code=status.HTTP_200_OK)
+async def send_sms_otp_info():
+    """
+    Browser-friendly endpoint information.
+    OTP sending is intentionally POST-only because it sends an SMS.
+    """
+    return {
+        "success": True,
+        "status": "ready",
+        "message": "SMS OTP endpoint is active. Use POST /sms/send-otp with JSON body to send an OTP.",
+        "method": "POST",
+        "body_example": {
+            "phone": "+919876543210"
+        },
+        "verify_endpoint": "/sms/verify-otp"
+    }
+
 @app.post("/sms/send-otp", status_code=status.HTTP_200_OK)
 async def send_sms_otp(request: SendOtpRequest):
     """
