@@ -2,31 +2,56 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Live Render Backend Deployment URL
-  static String get baseUrl => 'https://arasamaippu-ai-backend.onrender.com';
+  static const String _fallbackBackendUrl =
+      'https://arasamaippu-ai-backend.onrender.com';
+
+  /// Backend URL bundled at compile time.
+  ///
+  /// Release APK example:
+  /// flutter build apk --release --dart-define=BACKEND_URL=https://arasamaippu-ai-backend.onrender.com
+  static const String _configuredBackendUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: _fallbackBackendUrl,
+  );
+
+  static String get baseUrl {
+    final trimmedUrl = _configuredBackendUrl.trim();
+    if (trimmedUrl.endsWith('/')) {
+      return trimmedUrl.substring(0, trimmedUrl.length - 1);
+    }
+    return trimmedUrl;
+  }
 
   /// Sends a question to the backend FastAPI server `/ask` endpoint.
-  Future<Map<String, dynamic>> askQuestion(String question, {String? email}) async {
+  Future<Map<String, dynamic>> askQuestion(
+    String question, {
+    String? email,
+  }) async {
     final url = Uri.parse('$baseUrl/ask');
-    
+
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'question': question,
-          if (email != null && email.isNotEmpty) 'email': email,
-        }),
-      ).timeout(
-        const Duration(seconds: 45), // Generous timeout to allow Render free tier to wake up (cold start)
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'question': question,
+              if (email != null && email.isNotEmpty) 'email': email,
+            }),
+          )
+          .timeout(
+            const Duration(
+              seconds: 45,
+            ), // Generous timeout to allow Render free tier to wake up (cold start)
+          );
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final rawArticles = decoded['retrieved_articles'] as List<dynamic>? ?? [];
+        final rawArticles =
+            decoded['retrieved_articles'] as List<dynamic>? ?? [];
         final parsedArticles = rawArticles.map((item) {
           final map = item as Map<String, dynamic>;
           return {
@@ -45,14 +70,15 @@ class ApiService {
         };
       } else {
         // Handle server errors (e.g., 500, 503 database not ready)
-        String errorMessage = 'Server returned an error (${response.statusCode}).';
+        String errorMessage =
+            'Server returned an error (${response.statusCode}).';
         try {
           final decoded = jsonDecode(response.body) as Map<String, dynamic>;
           if (decoded.containsKey('detail')) {
             errorMessage = decoded['detail'] as String;
           }
         } catch (_) {}
-        
+
         return {
           'success': false,
           'answer': 'Error: $errorMessage Please try again.',
@@ -63,14 +89,16 @@ class ApiService {
     } on http.ClientException catch (e) {
       return {
         'success': false,
-        'answer': 'Could not connect to the backend server. Please verify the server is running. (${e.message})',
+        'answer':
+            'Could not connect to the backend server. Please verify the server is running. (${e.message})',
         'citations': <String>[],
         'retrieved_articles': <Map<String, String>>[],
       };
     } catch (e) {
       return {
         'success': false,
-        'answer': 'Error connecting to server. If the server is sleeping, it may take a minute to boot up. ($e)',
+        'answer':
+            'Error connecting to server. If the server is sleeping, it may take a minute to boot up. ($e)',
         'citations': <String>[],
         'retrieved_articles': <Map<String, String>>[],
       };

@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import random
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI, HTTPException, Request, status
@@ -192,6 +193,17 @@ import time
 # In-memory OTP Cache: phone -> {"code": otp_code, "expires_at": timestamp}
 OTP_STORAGE = {}
 
+def normalize_indian_phone(phone: str) -> str:
+    clean_digits = ''.join(ch for ch in phone.strip() if ch.isdigit())
+    if clean_digits.startswith("91") and len(clean_digits) == 12:
+        clean_digits = clean_digits[2:]
+    if len(clean_digits) != 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid 10-digit Indian mobile number."
+        )
+    return f"+91{clean_digits}"
+
 class SendOtpRequest(BaseModel):
     phone: str = Field(..., description="Mobile number formatted with +91")
 
@@ -205,23 +217,27 @@ async def send_sms_otp(request: SendOtpRequest):
     Sends 6-digit OTP via Textbee API using TEXTBEE_API_KEY & TEXTBEE_DEVICE_ID from environment variables (Render / .env).
     OTP expires in 15 minutes.
     """
-    phone = request.phone.strip()
-    clean_digits = re.sub(r'\D', '', phone)
-    if clean_digits.startswith("91") and len(clean_digits) == 12:
-        clean_digits = clean_digits[2:]
-    formatted_phone = f"+91{clean_digits}"
-
-    # Generate 6-digit OTP and set 15-minute expiration (15 * 60 = 900 seconds)
-    otp_code = str(random.randint(100000, 999999))
-    expires_at = time.time() + 900
-    OTP_STORAGE[formatted_phone] = {
-        "code": otp_code,
-        "expires_at": expires_at
-    }
+    formatted_phone = normalize_indian_phone(request.phone)
 
     # Fetch TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID from environment variables
     sms_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
     device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
+
+    if not sms_api_key or not device_id:
+        missing_values = []
+        if not sms_api_key:
+            missing_values.append("TEXTBEE_API_KEY")
+        if not device_id:
+            missing_values.append("TEXTBEE_DEVICE_ID")
+        logger.error(f"SMS OTP service is not configured. Missing: {', '.join(missing_values)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SMS OTP service is not configured on the server."
+        )
+
+    # Generate 6-digit OTP. Store it only after the SMS provider accepts dispatch.
+    otp_code = str(random.randint(100000, 999999))
+    expires_at = time.time() + 900
 
     # Professional OTP SMS Message
     professional_message = (
@@ -229,26 +245,11 @@ async def send_sms_otp(request: SendOtpRequest):
         f"Valid for 15 minutes. Please do not share this code with anyone."
     )
 
-    if not sms_api_key:
-        logger.warning("TEXTBEE_API_KEY is not set in environment variables. OTP stored locally.")
-        return {
-            "success": True,
-            "message": "OTP generated locally (TEXTBEE_API_KEY missing in server env)",
-            "phone": formatted_phone,
-            "verification_id": f"vid_{formatted_phone}"
-        }
-
     # Dispatch HTTP POST request to Textbee SMS API
-    dispatch_success = False
-    error_detail = ""
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            textbee_url = (
-                f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
-                if device_id
-                else "https://api.textbee.dev/api/v1/send-sms"
-            )
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
             headers = {
                 "Content-Type": "application/json",
                 "x-api-key": sms_api_key,
@@ -259,17 +260,28 @@ async def send_sms_otp(request: SendOtpRequest):
             }
             resp = await client.post(textbee_url, headers=headers, json=payload)
             logger.info(f"Textbee SMS API dispatch status: {resp.status_code}, response: {resp.text}")
-            if resp.status_code in (200, 201):
-                dispatch_success = True
-            else:
-                error_detail = f"Textbee returned status {resp.status_code}: {resp.text}"
+            if not 200 <= resp.status_code < 300:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"SMS provider rejected the OTP request ({resp.status_code})."
+                )
     except Exception as e:
-        logger.warning(f"Textbee SMS dispatch notice: {e}")
-        error_detail = str(e)
+        if isinstance(e, HTTPException):
+            raise e
+        logger.warning(f"Textbee SMS dispatch failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="SMS provider could not send the OTP right now."
+        )
+
+    OTP_STORAGE[formatted_phone] = {
+        "code": otp_code,
+        "expires_at": expires_at
+    }
 
     return {
         "success": True,
-        "message": "OTP sent successfully via Textbee" if dispatch_success else f"OTP generated (Textbee dispatch notice: {error_detail})",
+        "message": "OTP sent successfully via Textbee",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}"
     }
@@ -279,18 +291,12 @@ async def verify_sms_otp(request: VerifyOtpRequest):
     """
     Verifies 6-digit OTP code against stored OTP and enforces 15-minute expiration window.
     """
-    phone = request.phone.strip()
-    clean_digits = re.sub(r'\D', '', phone)
-    if clean_digits.startswith("91") and len(clean_digits) == 12:
-        clean_digits = clean_digits[2:]
-    formatted_phone = f"+91{clean_digits}"
+    formatted_phone = normalize_indian_phone(request.phone)
 
     otp_data = OTP_STORAGE.get(formatted_phone)
     user_otp = request.otp.strip()
 
     if not otp_data:
-        if user_otp == "123456":
-            return {"success": True, "message": "OTP verified successfully", "phone": formatted_phone}
         return {"success": False, "message": "No active OTP request found for this number. Please request a new OTP."}
 
     expected_code = otp_data["code"]
@@ -299,7 +305,7 @@ async def verify_sms_otp(request: VerifyOtpRequest):
     if time.time() > expires_at:
         return {"success": False, "message": "OTP code has expired after 15 minutes. Please request a new OTP."}
 
-    is_valid = (user_otp == expected_code) or (user_otp == "123456")
+    is_valid = user_otp == expected_code
 
     if not is_valid:
         return {"success": False, "message": "Invalid OTP code. Please try again."}

@@ -51,12 +51,9 @@ Make sure your FastAPI backend is running locally on port `8000`:
 
 ### Step C: Configure Endpoint Address
 If you are running the backend locally:
-- **Android Emulator:** The code in [api_service.dart](file:///f:/Law%20AI/mobile_app/lib/services/api_service.dart) is pre-configured to use `http://10.0.2.2:8000`, which redirects emulator traffic to your local computer's port `8000` automatically.
-- **Physical Device:** Change `10.0.2.2` in `lib/services/api_service.dart` to your computer's local IP address (e.g., `192.168.1.50`). Ensure your phone and computer are on the same Wi-Fi network.
-- **Deployed Backend:** Change the `baseUrl` in `lib/services/api_service.dart` to your public Render URL:
-  ```dart
-  static const String baseUrl = 'https://constitution-legal-assistant.onrender.com';
-  ```
+- **Android Emulator:** Build/run with `--dart-define=BACKEND_URL=http://10.0.2.2:8000`, which redirects emulator traffic to your local computer's port `8000` automatically.
+- **Physical Device:** Build/run with `--dart-define=BACKEND_URL=http://YOUR_COMPUTER_LAN_IP:8000` (for example, `http://192.168.1.50:8000`). Ensure your phone and computer are on the same Wi-Fi network.
+- **Deployed Backend:** Build/run with your public Render URL. If you do not pass a value, the app defaults to `https://arasamaippu-ai-backend.onrender.com`.
 
 ### Step D: Launch the App
 In your terminal, navigate to the `mobile_app` folder and run:
@@ -65,6 +62,14 @@ cd mobile_app
 flutter run
 ```
 *Select your active device/emulator from the list to launch the app.*
+
+### Release APK with Backend URL Packed In
+
+Use `--dart-define` so the backend URL is compiled directly into the release APK:
+
+```bash
+flutter build apk --release --dart-define=BACKEND_URL=https://arasamaippu-ai-backend.onrender.com
+```
 
 ---
 

@@ -16,8 +16,11 @@ Ensure you have **Python 3.10+** installed on your system.
 Create a file named `.env` in the `backend/` directory:
 ```env
 GOOGLE_API_KEY=your_gemini_api_key_here
+TEXTBEE_API_KEY=your_textbee_api_key_here
+TEXTBEE_DEVICE_ID=your_textbee_device_id_here
 ```
 > Get a free API key from [Google AI Studio](https://aistudio.google.com/).
+> For OTP SMS, connect an Android phone in Textbee and use the device-specific API key/device ID.
 
 ### 2. Ingest the Constitutional Data
 Run the data ingestion script to download the official Constitution text, parse it into articles, generate embeddings, and build the local vector database:
@@ -86,7 +89,8 @@ Configure the web service details:
 1. Scroll down to the **Environment Variables** section (or click the **Environment** tab).
 2. Click **Add Environment Variable**.
 3. Set Key to `GOOGLE_API_KEY` and Value to your actual Gemini API key.
-4. Click **Create Web Service**.
+4. Add `TEXTBEE_API_KEY` and `TEXTBEE_DEVICE_ID` from your Textbee dashboard so `/sms/send-otp` can dispatch OTP messages.
+5. Click **Create Web Service**.
 
 ### Step 5: Accessing Your Public API URL
 - Once deployment succeeds, Render provides your public URL at the top of the dashboard (e.g. `https://constitution-legal-assistant.onrender.com`).

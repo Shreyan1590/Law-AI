@@ -51,7 +51,8 @@ class _SignupScreenState extends State<SignupScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    if (widget.initialEmail?.isNotEmpty == true || widget.initialPhone?.isNotEmpty == true) {
+    if (widget.initialEmail?.isNotEmpty == true ||
+        widget.initialPhone?.isNotEmpty == true) {
       _authenticated = true;
       _nameController = TextEditingController(text: widget.initialName ?? '');
       _emailController = TextEditingController(text: widget.initialEmail ?? '');
@@ -97,7 +98,11 @@ class _SignupScreenState extends State<SignupScreen>
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Google account verified. Complete profile registration.')),
+            const SnackBar(
+              content: Text(
+                'Google account verified. Complete profile registration.',
+              ),
+            ),
           );
         }
       }
@@ -106,7 +111,8 @@ class _SignupScreenState extends State<SignupScreen>
         final googleUser = _authService.currentUser;
         setState(() {
           _authenticated = true;
-          _emailController.text = (result['email'] as String?)?.isNotEmpty == true
+          _emailController.text =
+              (result['email'] as String?)?.isNotEmpty == true
               ? (result['email'] as String)
               : (googleUser?.email ?? '');
           _nameController.text = (googleUser?.displayName?.isNotEmpty == true)
@@ -178,7 +184,9 @@ class _SignupScreenState extends State<SignupScreen>
     if (result['success'] == true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account already exists! Redirecting to login...')),
+          const SnackBar(
+            content: Text('Account already exists! Redirecting to login...'),
+          ),
         );
         Navigator.of(context).pop();
       }
@@ -186,7 +194,8 @@ class _SignupScreenState extends State<SignupScreen>
       if (result['code'] == 'ACCOUNT_NOT_FOUND') {
         setState(() {
           _authenticated = true;
-          _phoneController.text = result['phone'] as String? ?? _phoneController.text;
+          _phoneController.text =
+              result['phone'] as String? ?? _phoneController.text;
         });
       } else {
         setState(() {
@@ -218,9 +227,13 @@ class _SignupScreenState extends State<SignupScreen>
     if (result['success'] == true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account registered successfully! Welcome to Arasamaippu AI.')),
+          const SnackBar(
+            content: Text(
+              'Account registered successfully! Welcome to Arasamaippu AI.',
+            ),
+          ),
         );
-        Navigator.of(context).pushReplacementNamed('/main');
+        Navigator.of(context).pushReplacementNamed('/home');
       }
     } else {
       setState(() {
@@ -236,7 +249,10 @@ class _SignupScreenState extends State<SignupScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Register Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Register Profile',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -245,7 +261,10 @@ class _SignupScreenState extends State<SignupScreen>
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
@@ -266,7 +285,7 @@ class _SignupScreenState extends State<SignupScreen>
                                   color: theme.primaryColor.withAlpha(38),
                                   blurRadius: 20,
                                   spreadRadius: 4,
-                                )
+                                ),
                               ],
                             ),
                             child: const AppLogo(size: 80),
@@ -274,7 +293,9 @@ class _SignupScreenState extends State<SignupScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          _authenticated ? 'Complete Your Profile' : 'Create Your Account',
+                          _authenticated
+                              ? 'Complete Your Profile'
+                              : 'Create Your Account',
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -309,12 +330,19 @@ class _SignupScreenState extends State<SignupScreen>
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade700,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade800, fontSize: 13),
+                              style: TextStyle(
+                                color: Colors.red.shade800,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -328,7 +356,9 @@ class _SignupScreenState extends State<SignupScreen>
                     Card(
                       elevation: 2,
                       shadowColor: Colors.black.withAlpha(15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
                         child: Column(
@@ -350,7 +380,9 @@ class _SignupScreenState extends State<SignupScreen>
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: theme.primaryColor.withAlpha(40)),
+                                border: Border.all(
+                                  color: theme.primaryColor.withAlpha(40),
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withAlpha(10),
@@ -359,12 +391,19 @@ class _SignupScreenState extends State<SignupScreen>
                                   ),
                                 ],
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 4,
+                              ),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: _selectedMethod,
                                   isExpanded: true,
-                                  icon: Icon(Icons.keyboard_arrow_down_rounded, color: theme.primaryColor, size: 28),
+                                  icon: Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: theme.primaryColor,
+                                    size: 28,
+                                  ),
                                   dropdownColor: Colors.white,
                                   borderRadius: BorderRadius.circular(14),
                                   items: [
@@ -374,7 +413,13 @@ class _SignupScreenState extends State<SignupScreen>
                                         children: [
                                           const GoogleLogo(size: 18),
                                           const SizedBox(width: 12),
-                                          const Text('Google Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          const Text(
+                                            'Google Account',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -382,9 +427,19 @@ class _SignupScreenState extends State<SignupScreen>
                                       value: 'phone',
                                       child: Row(
                                         children: [
-                                          Icon(Icons.phone_android_rounded, size: 18, color: theme.primaryColor),
+                                          Icon(
+                                            Icons.phone_android_rounded,
+                                            size: 18,
+                                            color: theme.primaryColor,
+                                          ),
                                           const SizedBox(width: 12),
-                                          const Text('Phone SMS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          const Text(
+                                            'Phone SMS',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -405,17 +460,24 @@ class _SignupScreenState extends State<SignupScreen>
                             // 3. Status Badge: "Selected: Google Account" or "Selected: Phone SMS"
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: theme.primaryColor.withAlpha(15),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: theme.primaryColor.withAlpha(40)),
+                                border: Border.all(
+                                  color: theme.primaryColor.withAlpha(40),
+                                ),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    _selectedMethod == 'google' ? Icons.check_circle_rounded : Icons.phone_android_rounded,
+                                    _selectedMethod == 'google'
+                                        ? Icons.check_circle_rounded
+                                        : Icons.phone_android_rounded,
                                     size: 18,
                                     color: theme.primaryColor,
                                   ),
@@ -441,22 +503,39 @@ class _SignupScreenState extends State<SignupScreen>
                                   const Text(
                                     'Verify your identity instantly using your Google Account.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
                                   ),
                                   const SizedBox(height: 16),
                                   _isLoading
-                                      ? const Center(child: CircularProgressIndicator())
+                                      ? const Center(
+                                          child: CircularProgressIndicator(),
+                                        )
                                       : ElevatedButton.icon(
                                           onPressed: _verifyWithGoogle,
                                           icon: const GoogleLogo(size: 18),
-                                          label: const Text('Verify Google Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                                          label: const Text(
+                                            'Verify Google Account',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: Colors.white,
                                             foregroundColor: Colors.black87,
-                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
                                             elevation: 1,
-                                            side: BorderSide(color: Colors.grey.shade300),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            side: BorderSide(
+                                              color: Colors.grey.shade300,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
                                           ),
                                         ),
                                 ],
@@ -473,13 +552,22 @@ class _SignupScreenState extends State<SignupScreen>
                                     hintText: '9876543210',
                                     counterText: '',
                                     prefixIcon: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 12.0),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 12.0,
+                                      ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.phone_outlined, size: 20, color: Colors.black54),
+                                          Icon(
+                                            Icons.phone_outlined,
+                                            size: 20,
+                                            color: Colors.black54,
+                                          ),
                                           SizedBox(width: 6),
-                                          Text('🇮🇳', style: TextStyle(fontSize: 18)),
+                                          Text(
+                                            '🇮🇳',
+                                            style: TextStyle(fontSize: 18),
+                                          ),
                                           SizedBox(width: 4),
                                           Text(
                                             '+91 ',
@@ -492,39 +580,66 @@ class _SignupScreenState extends State<SignupScreen>
                                         ],
                                       ),
                                     ),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
                                 _isLoading
-                                    ? const Center(child: CircularProgressIndicator())
+                                    ? const Center(
+                                        child: CircularProgressIndicator(),
+                                      )
                                     : ElevatedButton(
                                         onPressed: _verifySendPhoneCode,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: theme.primaryColor,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                         ),
-                                        child: const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        child: const Text(
+                                          'Send Verification Code',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                               ] else ...[
                                 // Editable Phone Banner Above OTP Field
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: theme.primaryColor.withAlpha(20),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: theme.primaryColor.withAlpha(51)),
+                                    border: Border.all(
+                                      color: theme.primaryColor.withAlpha(51),
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.phone_android, size: 18, color: theme.primaryColor),
+                                      Icon(
+                                        Icons.phone_android,
+                                        size: 18,
+                                        color: theme.primaryColor,
+                                      ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
                                           'OTP sent to +91 ${_phoneController.text.trim()}',
-                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
                                         ),
                                       ),
                                       InkWell(
@@ -540,7 +655,11 @@ class _SignupScreenState extends State<SignupScreen>
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(Icons.edit_outlined, size: 16, color: theme.primaryColor),
+                                              Icon(
+                                                Icons.edit_outlined,
+                                                size: 16,
+                                                color: theme.primaryColor,
+                                              ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 'Edit',
@@ -566,22 +685,39 @@ class _SignupScreenState extends State<SignupScreen>
                                     labelText: '6-digit SMS Code',
                                     hintText: 'Enter 6-digit code',
                                     counterText: '',
-                                    prefixIcon: const Icon(Icons.lock_clock_outlined),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                    prefixIcon: const Icon(
+                                      Icons.lock_clock_outlined,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
                                 _isLoading
-                                    ? const Center(child: CircularProgressIndicator())
+                                    ? const Center(
+                                        child: CircularProgressIndicator(),
+                                      )
                                     : ElevatedButton(
                                         onPressed: _verifyPhoneCode,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: theme.primaryColor,
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
                                         ),
-                                        child: const Text('Confirm Code', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        child: const Text(
+                                          'Confirm Code',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                               ],
                             ],
@@ -594,7 +730,9 @@ class _SignupScreenState extends State<SignupScreen>
                     Card(
                       elevation: 2,
                       shadowColor: Colors.black.withAlpha(15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
                         child: Column(
@@ -608,13 +746,20 @@ class _SignupScreenState extends State<SignupScreen>
                                     color: Colors.green,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                                  child: const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
                                     'Verified! Set Display Name',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -649,7 +794,11 @@ class _SignupScreenState extends State<SignupScreen>
                                 decoration: InputDecoration(
                                   labelText: 'Email Address',
                                   prefixIcon: const Icon(Icons.email_outlined),
-                                  suffixIcon: const Icon(Icons.lock, size: 16, color: Colors.grey),
+                                  suffixIcon: const Icon(
+                                    Icons.lock,
+                                    size: 16,
+                                    color: Colors.grey,
+                                  ),
                                   filled: true,
                                   fillColor: Colors.grey.shade100,
                                   border: OutlineInputBorder(
@@ -668,7 +817,11 @@ class _SignupScreenState extends State<SignupScreen>
                                 decoration: InputDecoration(
                                   labelText: 'Phone Number',
                                   prefixIcon: const Icon(Icons.phone_outlined),
-                                  suffixIcon: const Icon(Icons.lock, size: 16, color: Colors.grey),
+                                  suffixIcon: const Icon(
+                                    Icons.lock,
+                                    size: 16,
+                                    color: Colors.grey,
+                                  ),
                                   filled: true,
                                   fillColor: Colors.grey.shade100,
                                   border: OutlineInputBorder(
@@ -681,20 +834,27 @@ class _SignupScreenState extends State<SignupScreen>
 
                             // Complete Registration CTA
                             _isLoading
-                                ? const Center(child: CircularProgressIndicator())
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
                                 : ElevatedButton(
                                     onPressed: _handleSignup,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: theme.primaryColor,
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
                                     child: const Text(
                                       'Register Account',
-                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   ),
                           ],
@@ -708,7 +868,10 @@ class _SignupScreenState extends State<SignupScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("Already registered? ", style: TextStyle(color: Colors.black54)),
+                      const Text(
+                        "Already registered? ",
+                        style: TextStyle(color: Colors.black54),
+                      ),
                       GestureDetector(
                         onTap: () {
                           Navigator.of(context).pop();

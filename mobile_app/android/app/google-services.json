@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1063410976132-8rsb8ph8iofg2fnpeqm10bnv73th9gf5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.arasamaippu.ai",
+            "certificate_hash": "d544030bc574bee1ce6a8a367b3e35f496f56b1c"
+          }
+        },
+        {
           "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
           "client_type": 3
         }
