@@ -11,3 +11,7 @@ services:
         value: 3.10.11
       - key: SMS_API_KEY
         sync: false
+      - key: TEXTBEE_API_KEY
+        sync: false
+      - key: TEXTBEE_DEVICE_ID
+        sync: false

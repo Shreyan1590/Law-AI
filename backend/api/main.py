@@ -178,11 +178,12 @@ async def send_sms_otp(request: SendOtpRequest):
     otp_code = str(random.randint(100000, 999999))
     OTP_STORAGE[formatted_phone] = otp_code
 
-    # Fetch SMS_API_KEY from environment variables
-    sms_api_key = os.getenv("SMS_API_KEY", "")
+    # Fetch TEXTBEE_API_KEY / SMS_API_KEY and optional TEXTBEE_DEVICE_ID from environment variables
+    sms_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
+    device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
 
     if not sms_api_key:
-        logger.warning("SMS_API_KEY is not set in environment variables. OTP stored locally.")
+        logger.warning("TEXTBEE_API_KEY / SMS_API_KEY is not set in environment variables. OTP stored locally.")
         return {
             "success": True,
             "message": "OTP generated successfully",
@@ -190,31 +191,52 @@ async def send_sms_otp(request: SendOtpRequest):
             "verification_id": f"vid_{formatted_phone}"
         }
 
-    # Dispatch HTTP POST request to SMS Gateway API from server
+    # Dispatch HTTP POST request to Textbee SMS API from server
     try:
         import httpx
         async with httpx.AsyncClient(timeout=10.0) as client:
+            textbee_url = (
+                f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
+                if device_id
+                else "https://api.textbee.dev/api/v1/send-sms"
+            )
             resp = await client.post(
-                "https://api.smsgatewayapi.com/v1/message/send",
+                textbee_url,
                 headers={
+                    "x-api-key": sms_api_key,
                     "Authorization": f"Bearer {sms_api_key}",
-                    "X-API-Key": sms_api_key,
                     "Content-Type": "application/json"
                 },
                 json={
-                    "receiver": formatted_phone,
-                    "message": f"Your OTP for Arasamaippu AI is: {otp_code}. Valid for 10 minutes.",
-                    "phone": formatted_phone,
-                    "otp": otp_code
+                    "recipients": [formatted_phone],
+                    "recipient": formatted_phone,
+                    "message": f"Your OTP for Arasamaippu AI is: {otp_code}. Valid for 10 minutes."
                 }
             )
-            logger.info(f"SMS Gateway API dispatch response code: {resp.status_code}")
+            logger.info(f"Textbee SMS API dispatch status: {resp.status_code}, response: {resp.text}")
+
+            if resp.status_code not in (200, 201):
+                resp_fallback = await client.post(
+                    "https://api.smsgatewayapi.com/v1/message/send",
+                    headers={
+                        "Authorization": f"Bearer {sms_api_key}",
+                        "X-API-Key": sms_api_key,
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "receiver": formatted_phone,
+                        "message": f"Your OTP for Arasamaippu AI is: {otp_code}. Valid for 10 minutes.",
+                        "phone": formatted_phone,
+                        "otp": otp_code
+                    }
+                )
+                logger.info(f"Fallback SMS Gateway API dispatch status: {resp_fallback.status_code}")
     except Exception as e:
-        logger.warning(f"SMS Gateway API dispatch notice: {e}")
+        logger.warning(f"SMS dispatch notice: {e}")
 
     return {
         "success": True,
-        "message": "OTP sent successfully via SMS Gateway API",
+        "message": "OTP sent successfully via Textbee SMS Gateway",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}"
     }
