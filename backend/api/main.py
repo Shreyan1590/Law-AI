@@ -4,7 +4,7 @@ import logging
 import random
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
@@ -382,8 +382,36 @@ async def health_check(raw_request: Request):
             detail=f"Health check failed: {str(e)}"
         )
 
+def log_ask_transaction_to_d1(email: str | None, question: str, response: dict, cited_articles_metadata: list[str]) -> None:
+    """
+    Best-effort REST D1 logging for Render/local deployments.
+    Runs after the HTTP response so slow logging never blocks the answer.
+    """
+    try:
+        if email:
+            sql = "INSERT INTO history (user_email, query, answer, citations, retrieved_articles) VALUES (?, ?, ?, ?, ?)"
+            d1_client.execute(sql, [
+                email.strip().lower(),
+                question,
+                response["answer"],
+                json.dumps(response['articles_cited']),
+                json.dumps(response['retrieved_articles'])
+            ])
+            logger.info(f"REST D1: Logged to user history for {email}")
+        else:
+            sql = "INSERT INTO query_logs (query, timestamp, cited_articles, generated_citations) VALUES (?, datetime('now'), ?, ?)"
+            d1_client.execute(sql, [
+                question,
+                json.dumps(cited_articles_metadata),
+                json.dumps(response['articles_cited'])
+            ])
+            logger.info("REST D1: Logged guest query transaction successfully.")
+    except Exception as d1_err:
+        logger.warning(f"REST D1: Failed to log transaction: {d1_err}")
+
+
 @app.post("/ask", response_model=AskResponse, status_code=status.HTTP_200_OK)
-async def ask_question(request: AskRequest, raw_request: Request):
+async def ask_question(request: AskRequest, raw_request: Request, background_tasks: BackgroundTasks):
     """
     RAG endpoint that accepts a question, retrieves relevant articles,
     generates a plain-language answer, and logs the query.
@@ -444,27 +472,13 @@ async def ask_question(request: AskRequest, raw_request: Request):
             except Exception as d1_err:
                 logger.warning(f"Worker D1: Failed to log transaction: {d1_err}")
         elif d1_client.is_configured():
-            try:
-                if request.email:
-                    sql = "INSERT INTO history (user_email, query, answer, citations, retrieved_articles) VALUES (?, ?, ?, ?, ?)"
-                    d1_client.execute(sql, [
-                        request.email.strip().lower(),
-                        question,
-                        response["answer"],
-                        json.dumps(response['articles_cited']),
-                        json.dumps(response['retrieved_articles'])
-                    ])
-                    logger.info(f"REST D1: Logged to user history for {request.email}")
-                else:
-                    sql = "INSERT INTO query_logs (query, timestamp, cited_articles, generated_citations) VALUES (?, datetime('now'), ?, ?)"
-                    d1_client.execute(sql, [
-                        question,
-                        json.dumps(cited_articles_metadata),
-                        json.dumps(response['articles_cited'])
-                    ])
-                    logger.info("REST D1: Logged guest query transaction successfully.")
-            except Exception as d1_err:
-                logger.warning(f"REST D1: Failed to log transaction: {d1_err}")
+            background_tasks.add_task(
+                log_ask_transaction_to_d1,
+                request.email,
+                question,
+                response,
+                cited_articles_metadata,
+            )
         
         return AskResponse(
             answer=response["answer"],

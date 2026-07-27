@@ -223,7 +223,7 @@ def _safe_google_api_key() -> str:
     return api_key
 
 
-def _call_gemini(prompt: str, timeout: int = 18) -> str | None:
+def _call_gemini(prompt: str, timeout: int = 8) -> str | None:
     """
     Optional LLM polish. The app remains functional without GOOGLE_API_KEY.
     """

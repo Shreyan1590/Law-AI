@@ -15,6 +15,7 @@ class D1Client:
         self.api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
         self.account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
         self.database_id = os.getenv("CLOUDFLARE_D1_DATABASE_ID", "9856cabc-fb1d-4c51-a91e-52b60e05b0eb").strip()
+        self.timeout_seconds = float(os.getenv("D1_REQUEST_TIMEOUT_SECONDS", "8"))
 
     def is_configured(self) -> bool:
         """
@@ -45,7 +46,7 @@ class D1Client:
         }
 
         try:
-            response = requests.post(url, json=payload, headers=headers, timeout=20)
+            response = requests.post(url, json=payload, headers=headers, timeout=self.timeout_seconds)
             response.raise_for_status()
             data = response.json()
 

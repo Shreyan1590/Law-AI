@@ -54,7 +54,7 @@ def extract_article_numbers(query: str) -> list[str]:
 
     return article_numbers
 
-def _format_article_row(row) -> dict:
+def _format_article_row(row, score: float = 1.0) -> dict:
     return {
         "content": row["content"],
         "metadata": {
@@ -63,8 +63,67 @@ def _format_article_row(row) -> dict:
             "part": row["part"],
             "type": row["type"]
         },
-        "score": 1.0
+        "score": score
     }
+
+def _keyword_list(query: str) -> list[str]:
+    stop_words = {
+        "about", "article", "articles", "explain", "match", "matching", "please",
+        "show", "tell", "what", "which", "with", "from", "give", "simple",
+    }
+    keywords: list[str] = []
+    seen = set()
+    for raw_word in re.split(r'\W+', query.lower()):
+        word = raw_word.strip()
+        if len(word) <= 3 or word in stop_words or word in seen:
+            continue
+        seen.add(word)
+        keywords.append(word)
+    return keywords[:8]
+
+def _keyword_search_d1(d1: D1Client, query: str, k: int) -> list[dict]:
+    """
+    Fast Render/local fallback that avoids loading sentence-transformers when D1
+    can answer a topic search directly.
+    """
+    if not d1.is_configured():
+        return []
+
+    keywords = _keyword_list(query)
+    if not keywords:
+        return []
+
+    score_parts = []
+    score_params = []
+    where_parts = []
+    where_params = []
+    for keyword in keywords:
+        like = f"%{keyword}%"
+        score_parts.append(
+            "(CASE WHEN LOWER(title) LIKE LOWER(?) THEN 3 ELSE 0 END + "
+            "CASE WHEN LOWER(content) LIKE LOWER(?) THEN 1 ELSE 0 END)"
+        )
+        score_params.extend([like, like])
+        where_parts.append("(LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))")
+        where_params.extend([like, like])
+
+    sql = (
+        "SELECT number, title, part, content, type, "
+        f"({' + '.join(score_parts)}) AS match_score "
+        "FROM articles "
+        "WHERE type = 'article' AND "
+        f"({' OR '.join(where_parts)}) "
+        "ORDER BY match_score DESC, CAST(number AS INTEGER) ASC "
+        "LIMIT ?"
+    )
+
+    rows = d1.execute(sql, score_params + where_params + [k])
+    max_score = max(len(keywords) * 4, 1)
+    results = []
+    for row in rows:
+        score = min(float(row.get("match_score", 1)) / max_score, 1.0)
+        results.append(_format_article_row(row, score=score))
+    return results
 
 def get_d1_client():
     global _d1_client
@@ -129,7 +188,7 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
         formatted_results = []
 
         try:
-            keywords = [w.strip() for w in re.split(r'\W+', query) if len(w.strip()) > 3]
+            keywords = _keyword_list(query)
             if keywords:
                 conditions = []
                 sql_params = []
@@ -210,7 +269,15 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
 
         return exact_article_docs
             
-    # 2. Similarity search using Chroma
+    # 2. Prefer fast D1 keyword search on Render/local deployments when possible.
+    try:
+        d1_keyword_results = _keyword_search_d1(d1, query, k)
+        if d1_keyword_results:
+            return d1_keyword_results[:k]
+    except Exception as e:
+        print(f"Warning: D1 keyword search failed: {e}. Falling back to Chroma.")
+
+    # 3. Similarity search using Chroma
     db = get_vector_store()
     try:
         results = db.similarity_search_with_relevance_scores(query, k=k)
