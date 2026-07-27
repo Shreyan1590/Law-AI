@@ -69,11 +69,6 @@ class AuthService {
         final GoogleAuthProvider authProvider = GoogleAuthProvider();
         userCredential = await _auth.signInWithPopup(authProvider);
       } else {
-        // Clear any stale cached sessions before starting new authentication
-        try {
-          await GoogleSignIn.instance.signOut();
-        } catch (_) {}
-
         await GoogleSignIn.instance.initialize(
           serverClientId: _webClientId,
         );

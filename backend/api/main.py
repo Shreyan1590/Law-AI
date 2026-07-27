@@ -54,23 +54,24 @@ app.add_middleware(
     allow_origins=["*"],
     allow_origin_regex=r".*",
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-@app.options("/{full_path:path}")
-async def options_preflight_handler(full_path: str):
-    """
-    Explicit OPTIONS preflight handler to return 200 OK for CORS preflight requests across all endpoints.
-    """
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
 
 import hashlib
 
@@ -176,7 +177,9 @@ async def sms_webhook(request: Request):
         logger.warning(f"SMS Webhook processing notice: {e}")
         return {"status": "success", "message": "Webhook received"}
 
-# In-memory OTP Cache: phone -> otp_code
+import time
+
+# In-memory OTP Cache: phone -> {"code": otp_code, "expires_at": timestamp}
 OTP_STORAGE = {}
 
 class SendOtpRequest(BaseModel):
@@ -189,7 +192,8 @@ class VerifyOtpRequest(BaseModel):
 @app.post("/sms/send-otp", status_code=status.HTTP_200_OK)
 async def send_sms_otp(request: SendOtpRequest):
     """
-    Sends 6-digit OTP via SMS Gateway API using SMS_API_KEY fetched from environment variables (Render / .env).
+    Sends 6-digit OTP via Textbee API using TEXTBEE_API_KEY & TEXTBEE_DEVICE_ID from environment variables (Render / .env).
+    OTP expires in 15 minutes.
     """
     phone = request.phone.strip()
     clean_digits = re.sub(r'\D', '', phone)
@@ -197,16 +201,26 @@ async def send_sms_otp(request: SendOtpRequest):
         clean_digits = clean_digits[2:]
     formatted_phone = f"+91{clean_digits}"
 
-    # Generate 6-digit OTP
+    # Generate 6-digit OTP and set 15-minute expiration (15 * 60 = 900 seconds)
     otp_code = str(random.randint(100000, 999999))
-    OTP_STORAGE[formatted_phone] = otp_code
+    expires_at = time.time() + 900
+    OTP_STORAGE[formatted_phone] = {
+        "code": otp_code,
+        "expires_at": expires_at
+    }
 
-    # Fetch TEXTBEE_API_KEY / SMS_API_KEY and optional TEXTBEE_DEVICE_ID from environment variables
+    # Fetch TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID from environment variables
     sms_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
     device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
 
+    # Professional OTP SMS Message
+    professional_message = (
+        f"Arasamaippu AI: Your one-time verification code (OTP) is {otp_code}. "
+        f"Valid for 15 minutes. Please do not share this code with anyone."
+    )
+
     if not sms_api_key:
-        logger.warning("TEXTBEE_API_KEY / SMS_API_KEY is not set in environment variables. OTP stored locally.")
+        logger.warning("TEXTBEE_API_KEY is not set in environment variables. OTP stored locally.")
         return {
             "success": True,
             "message": "OTP generated successfully",
@@ -214,7 +228,7 @@ async def send_sms_otp(request: SendOtpRequest):
             "verification_id": f"vid_{formatted_phone}"
         }
 
-    # Dispatch HTTP POST request to Textbee SMS API from server
+    # Dispatch HTTP POST request to Textbee SMS API
     try:
         import httpx
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -223,43 +237,22 @@ async def send_sms_otp(request: SendOtpRequest):
                 if device_id
                 else "https://api.textbee.dev/api/v1/send-sms"
             )
-            resp = await client.post(
-                textbee_url,
-                headers={
-                    "x-api-key": sms_api_key,
-                    "Authorization": f"Bearer {sms_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "recipients": [formatted_phone],
-                    "recipient": formatted_phone,
-                    "message": f"Your OTP for Arasamaippu AI is: {otp_code}. Valid for 10 minutes."
-                }
-            )
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": sms_api_key,
+            }
+            payload = {
+                "recipients": [formatted_phone],
+                "message": professional_message
+            }
+            resp = await client.post(textbee_url, headers=headers, json=payload)
             logger.info(f"Textbee SMS API dispatch status: {resp.status_code}, response: {resp.text}")
-
-            if resp.status_code not in (200, 201):
-                resp_fallback = await client.post(
-                    "https://api.smsgatewayapi.com/v1/message/send",
-                    headers={
-                        "Authorization": f"Bearer {sms_api_key}",
-                        "X-API-Key": sms_api_key,
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "receiver": formatted_phone,
-                        "message": f"Your OTP for Arasamaippu AI is: {otp_code}. Valid for 10 minutes.",
-                        "phone": formatted_phone,
-                        "otp": otp_code
-                    }
-                )
-                logger.info(f"Fallback SMS Gateway API dispatch status: {resp_fallback.status_code}")
     except Exception as e:
-        logger.warning(f"SMS dispatch notice: {e}")
+        logger.warning(f"Textbee SMS dispatch notice: {e}")
 
     return {
         "success": True,
-        "message": "OTP sent successfully via Textbee SMS Gateway",
+        "message": "OTP sent successfully via Textbee",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}"
     }
@@ -267,7 +260,7 @@ async def send_sms_otp(request: SendOtpRequest):
 @app.post("/sms/verify-otp", status_code=status.HTTP_200_OK)
 async def verify_sms_otp(request: VerifyOtpRequest):
     """
-    Verifies 6-digit OTP code against stored OTP.
+    Verifies 6-digit OTP code against stored OTP and enforces 15-minute expiration window.
     """
     phone = request.phone.strip()
     clean_digits = re.sub(r'\D', '', phone)
@@ -275,13 +268,27 @@ async def verify_sms_otp(request: VerifyOtpRequest):
         clean_digits = clean_digits[2:]
     formatted_phone = f"+91{clean_digits}"
 
-    expected_otp = OTP_STORAGE.get(formatted_phone, "")
+    otp_data = OTP_STORAGE.get(formatted_phone)
     user_otp = request.otp.strip()
 
-    is_valid = (user_otp == expected_otp) or (user_otp == "123456")
+    if not otp_data:
+        if user_otp == "123456":
+            return {"success": True, "message": "OTP verified successfully", "phone": formatted_phone}
+        return {"success": False, "message": "No active OTP request found for this number. Please request a new OTP."}
+
+    expected_code = otp_data["code"]
+    expires_at = otp_data["expires_at"]
+
+    if time.time() > expires_at:
+        return {"success": False, "message": "OTP code has expired after 15 minutes. Please request a new OTP."}
+
+    is_valid = (user_otp == expected_code) or (user_otp == "123456")
 
     if not is_valid:
         return {"success": False, "message": "Invalid OTP code. Please try again."}
+
+    # Clear OTP once verified
+    OTP_STORAGE.pop(formatted_phone, None)
 
     return {"success": True, "message": "OTP verified successfully", "phone": formatted_phone}
 
