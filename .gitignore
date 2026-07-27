@@ -1,0 +1,68 @@
+# Python & Virtual Environments / Packages
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+.venv/lib/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment & Secret Files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Local RAG DB & Log Caches
+backend/chroma_db/
+chroma_db/
+backend/logs/
+*.log
+
+# Node & JS Packages
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Flutter / Dart Packages & Build Output
+.dart_tool/
+.pub/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/build/
+**/coverage/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/ios/Pods/
+/ios/.symlinks/
+
+# IDEs & OS System Files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

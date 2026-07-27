@@ -1,0 +1,12 @@
+# Python Virtual Environment
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Local Environment Variables & DB Cache
+.env
+chroma_db/
+logs/
+*.log

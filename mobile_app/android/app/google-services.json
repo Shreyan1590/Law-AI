@@ -1,0 +1,97 @@
+﻿{
+  "project_info": {
+    "project_number": "1063410976132",
+    "project_id": "indian-constitution-law",
+    "storage_bucket": "indian-constitution-law.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063410976132:android:2906f3e9ae806fec3a49d1",
+        "android_client_info": {
+          "package_name": "com.arasamaippu.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOkSdWFjiMVjr4v0Va_gqIG2HVlCRcSek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063410976132:android:7b3b13dabf62065c3a49d1",
+        "android_client_info": {
+          "package_name": "com.arasamaippu.legalassistant"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOkSdWFjiMVjr4v0Va_gqIG2HVlCRcSek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063410976132:android:7f7e103bd7e580cc3a49d1",
+        "android_client_info": {
+          "package_name": "com.indianconstitution.legalassistant.mobile_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOkSdWFjiMVjr4v0Va_gqIG2HVlCRcSek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

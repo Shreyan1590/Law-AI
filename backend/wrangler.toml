@@ -1,0 +1,9 @@
+name = "law-ai-backend"
+main = "api/main.py"
+compatibility_date = "2026-07-26"
+compatibility_flags = ["python_workers"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "law-ai-db"
+database_id = "9856cabc-fb1d-4c51-a91e-52b60e05b0eb"

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A365D" stop-opacity="1" />
+      <stop offset="100%" stop-color="#1A365D" stop-opacity="0.85" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer Shield Circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bgGrad)" />
+  
+  <!-- Gold Accent Inner Border -->
+  <circle cx="256" cy="256" r="225" fill="none" stroke="#D69E2E" stroke-opacity="0.5" stroke-width="20" />
+  
+  <!-- Base Pedestal -->
+  <rect x="164" y="348" width="184" height="41" rx="10" fill="#D69E2E" />
+  
+  <!-- Pillar Column -->
+  <rect x="236" y="174" width="41" height="184" rx="8" fill="#FFFFFF" />
+  
+  <!-- Top Beam -->
+  <rect x="123" y="169" width="266" height="31" rx="10" fill="#FFFFFF" />
+  
+  <!-- Left Scale Strings & Bowl -->
+  <line x1="143" y1="184" x2="123" y2="266" stroke="#FFFFFF" stroke-linecap="round" stroke-width="18" />
+  <line x1="143" y1="184" x2="164" y2="266" stroke="#FFFFFF" stroke-linecap="round" stroke-width="18" />
+  <path d="M 102 266 Q 143 307 184 266 Z" fill="#D69E2E" />
+  
+  <!-- Right Scale Strings & Bowl -->
+  <line x1="369" y1="184" x2="348" y2="266" stroke="#FFFFFF" stroke-linecap="round" stroke-width="18" />
+  <line x1="369" y1="184" x2="389" y2="266" stroke="#FFFFFF" stroke-linecap="round" stroke-width="18" />
+  <path d="M 328 266 Q 369 307 410 266 Z" fill="#D69E2E" />
+  
+  <!-- AI Sparkle Starburst -->
+  <path d="M 256 77 Q 256 123 302 123 Q 256 123 256 169 Q 256 123 210 123 Q 256 123 256 77 Z" fill="#D69E2E" />
+</svg>

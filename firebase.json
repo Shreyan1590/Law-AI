@@ -1,0 +1,13 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Indian Constitution Law",
+        "supportEmail": "shreyanofficial25@gmail.com"
+      }
+    }
+  }
+}
