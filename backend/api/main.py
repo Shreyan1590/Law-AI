@@ -48,14 +48,29 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS (so mobile app or browser can reach it) - Local RAG Mode
+# Enable CORS with regex origin matching to ensure browsers never block fetch requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this to your app's specific domains
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_origin_regex=r".*",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.options("/{full_path:path}")
+async def options_preflight_handler(full_path: str):
+    """
+    Explicit OPTIONS preflight handler to return 200 OK for CORS preflight requests across all endpoints.
+    """
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
 
 import hashlib
 

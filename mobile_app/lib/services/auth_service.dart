@@ -148,27 +148,7 @@ class AuthService {
         debugPrint('Backend SMS OTP endpoint notice: $smsErr');
       }
 
-      // Also trigger Firebase Phone Auth as web/mobile fallback if supported
-      if (kIsWeb) {
-        try {
-          _webConfirmationResult = await _auth.signInWithPhoneNumber(formattedPhone);
-        } catch (_) {}
-      } else {
-        try {
-          await _auth.verifyPhoneNumber(
-            phoneNumber: formattedPhone,
-            verificationCompleted: (PhoneAuthCredential credential) async {
-              await _auth.signInWithCredential(credential);
-            },
-            verificationFailed: (_) {},
-            codeSent: (String vId, int? resendToken) {
-              _verificationToPhone[vId] = formattedPhone;
-            },
-            codeAutoRetrievalTimeout: (_) {},
-          );
-        } catch (_) {}
-      }
-
+      // Signal success to move to OTP code entry screen
       onCodeSent(verificationId);
     } catch (e) {
       onError(e.toString());
