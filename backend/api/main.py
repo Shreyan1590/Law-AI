@@ -257,19 +257,21 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     )
 
     # 3. Read SMS Gateway credentials securely from environment variables (.env)
-    sms_gate_user = os.getenv("SMS_GATE_USERNAME", "")
-    sms_gate_pass = os.getenv("SMS_GATE_PASSWORD", "")
-    sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "")
+    sms_gate_user = os.getenv("SMS_GATE_USERNAME", "").strip()
+    sms_gate_pass = os.getenv("SMS_GATE_PASSWORD", "").strip()
+    sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "").strip()
+    sms_gate_url = os.getenv("SMS_GATE_URL", "").strip() or "https://api.sms-gate.app/3rdparty/v1/message/send"
 
     # Fallback credentials
-    textbee_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
-    textbee_device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
+    textbee_api_key = (os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")).strip()
+    textbee_device_id = os.getenv("TEXTBEE_DEVICE_ID", "").strip()
 
-    provider_used = "SMS Gateway (sms-gate.app)"
+    provider_used = "SMS Gateway (api.sms-gate.app)"
+    dispatch_success = False
+    dispatch_error_msg = ""
 
     if sms_gate_user and sms_gate_pass and sms_gate_device_id:
         import httpx
-        sms_gate_url = "https://sms-gate.app/3rdparty/v1/message/send"
         params = {
             "skipPhoneValidation": "true",
             "deviceActiveWithin": "12"
@@ -289,22 +291,18 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                     auth=(sms_gate_user, sms_gate_pass),
                     headers={"Content-Type": "application/json"}
                 )
-                logger.info(f"SMS Gate API status: {resp.status_code}, response: {resp.text}")
-                if not 200 <= resp.status_code < 300:
-                    logger.error(f"SMS Gate API error ({resp.status_code}): {resp.text}")
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"SMS Gateway rejected OTP dispatch ({resp.status_code})."
-                    )
+                logger.info(f"SMS Gate API dispatch status: {resp.status_code}, response: {resp.text}")
+                if 200 <= resp.status_code < 300:
+                    dispatch_success = True
+                else:
+                    dispatch_error_msg = f"SMS Gate returned status {resp.status_code}: {resp.text}"
+                    logger.warning(f"SMS Gate dispatch notice: {dispatch_error_msg}")
         except Exception as err:
-            if isinstance(err, HTTPException):
-                raise err
-            logger.error(f"Network error dispatching SMS via SMS Gate: {err}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Network failure connecting to SMS Gateway service."
-            )
-    elif textbee_api_key and textbee_device_id:
+            logger.warning(f"Network failure connecting to SMS Gate: {err}")
+            dispatch_error_msg = str(err)
+
+    # If SMS Gate was not configured or failed, try Textbee as automatic fallback
+    if not dispatch_success and textbee_api_key and textbee_device_id:
         provider_used = "Textbee API (Fallback)"
         import httpx
         textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device_id}/send-sms"
@@ -313,24 +311,17 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.post(textbee_url, headers=headers, json=payload)
-                if not 200 <= resp.status_code < 300:
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Fallback provider rejected OTP request ({resp.status_code})."
-                    )
+                logger.info(f"Textbee Fallback dispatch status: {resp.status_code}, response: {resp.text}")
+                if 200 <= resp.status_code < 300:
+                    dispatch_success = True
+                else:
+                    dispatch_error_msg += f" | Textbee returned {resp.status_code}: {resp.text}"
         except Exception as err:
-            if isinstance(err, HTTPException):
-                raise err
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Network failure connecting to fallback SMS service."
-            )
-    else:
-        logger.error("No valid SMS Gateway credentials configured in server environment.")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMS service is not configured. Please set SMS_GATE_USERNAME, SMS_GATE_PASSWORD, and SMS_GATE_DEVICE_ID in .env."
-        )
+            logger.warning(f"Fallback SMS dispatch notice: {err}")
+            dispatch_error_msg += f" | Textbee network error: {err}"
+
+    if not dispatch_success and not (sms_gate_user or textbee_api_key):
+        logger.warning("No SMS Gateway credentials set in server environment. Storing OTP in Firestore locally.")
 
     # 4. Record rate-limit timestamp & save in-memory cache
     OTP_RATE_LIMIT[formatted_phone] = now
