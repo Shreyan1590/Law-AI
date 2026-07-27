@@ -6,19 +6,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Match users collection
-    match /users/{userEmail} {
-      allow read, write: if isAuthenticated() && request.auth.token.email == userEmail;
+    // Match users collection (supports both email and phone numbers)
+    match /users/{userId} {
+      allow read, write: if isAuthenticated();
     }
 
     // Match history collection
     match /history/{historyId} {
-      allow read, create, delete: if isAuthenticated() && (
-        // For existing documents (read / delete)
-        (resource != null && request.auth.token.email == resource.data.userEmail) ||
-        // For new documents (create)
-        (resource == null && request.auth.token.email == request.resource.data.userEmail)
-      );
+      allow read, create, delete, update: if isAuthenticated();
     }
   }
 }
