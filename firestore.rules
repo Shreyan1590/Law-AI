@@ -1,19 +1,64 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - email: string (optional)
+//   - phone: string (optional)
+//   - displayName: string (optional)
+//   - createdAt: timestamp (required on creation)
+//
+// Collection: history
+// Document ID: {historyId}
+// Fields:
+//   - userId: string (required)
+//   - question: string (required)
+//   - answer: string (required)
+//   - timestamp: timestamp (required)
+//
+// Collection: otps
+// Document ID: {phone} (formatted e.g. "+919876543210")
+// Fields:
+//   - phone: string (required)
+//   - code: string (required, 6-digit)
+//   - expires_at: number (required, unix timestamp)
+//   - created_at: number (required, unix timestamp)
+//   - verified: bool (required)
+//
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper to check if user is authenticated
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Match users collection (supports both email and phone numbers)
+    // Collection: users
     match /users/{userId} {
       allow read, write: if isAuthenticated();
     }
 
-    // Match history collection
+    // Collection: history
     match /history/{historyId} {
       allow read, create, delete, update: if isAuthenticated();
+    }
+
+    // Collection: otps
+    // Managed server-side via Firebase Admin SDK / backend API.
+    // Direct client access denied for security.
+    match /otps/{phone} {
+      allow read, write: if false;
     }
   }
 }

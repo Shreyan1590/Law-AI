@@ -188,9 +188,23 @@ async def sms_webhook(request: Request):
         logger.warning(f"SMS Webhook processing notice: {e}")
         return {"status": "success", "message": "Webhook received"}
 
-import time
+# Firebase Admin SDK & Firestore Client Initialization
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore
+    if not firebase_admin._apps:
+        # Default initialization targeting Indian Constitution Law Firebase Project
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred, {
+            'projectId': 'indian-constitution-law',
+        })
+    db_firestore = firestore.client()
+    logger.info("Firebase Admin & Cloud Firestore client initialized for 'otps' collection management.")
+except Exception as fs_init_err:
+    logger.warning(f"Firestore initialization notice (operating with local fallback cache): {fs_init_err}")
+    db_firestore = None
 
-# In-memory OTP Cache: phone -> {"code": otp_code, "expires_at": timestamp}
+# In-memory OTP Cache Fallback: phone -> {"code": otp_code, "expires_at": timestamp}
 OTP_STORAGE = {}
 
 def normalize_indian_phone(phone: str) -> str:
@@ -232,7 +246,7 @@ async def send_sms_otp_info():
 async def send_sms_otp(request: SendOtpRequest):
     """
     Sends 6-digit OTP via Textbee API using TEXTBEE_API_KEY & TEXTBEE_DEVICE_ID from environment variables (Render / .env).
-    OTP expires in 15 minutes.
+    Saves OTP into Cloud Firestore 'otps' collection with 15-minute expiration.
     """
     formatted_phone = normalize_indian_phone(request.phone)
 
@@ -252,9 +266,9 @@ async def send_sms_otp(request: SendOtpRequest):
             detail="SMS OTP service is not configured on the server."
         )
 
-    # Generate 6-digit OTP. Store it only after the SMS provider accepts dispatch.
+    # Generate 6-digit OTP.
     otp_code = str(random.randint(100000, 999999))
-    expires_at = time.time() + 900
+    expires_at = time.time() + 900  # 15 minutes
 
     # Professional OTP SMS Message
     professional_message = (
@@ -291,14 +305,30 @@ async def send_sms_otp(request: SendOtpRequest):
             detail="SMS provider could not send the OTP right now."
         )
 
+    # Store OTP in-memory
     OTP_STORAGE[formatted_phone] = {
         "code": otp_code,
         "expires_at": expires_at
     }
 
+    # Save/Over-write OTP document in Cloud Firestore 'otps' collection
+    if db_firestore:
+        try:
+            doc_ref = db_firestore.collection("otps").document(formatted_phone)
+            doc_ref.set({
+                "phone": formatted_phone,
+                "code": otp_code,
+                "expires_at": expires_at,
+                "created_at": time.time(),
+                "verified": False
+            })
+            logger.info(f"Saved OTP document into Firestore 'otps' collection for {formatted_phone}")
+        except Exception as fs_save_err:
+            logger.warning(f"Firestore OTP document write error: {fs_save_err}")
+
     return {
         "success": True,
-        "message": "OTP sent successfully via Textbee",
+        "message": "OTP sent successfully via Textbee and saved in Firestore",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}"
     }
@@ -306,18 +336,29 @@ async def send_sms_otp(request: SendOtpRequest):
 @app.post("/sms/verify-otp", status_code=status.HTTP_200_OK)
 async def verify_sms_otp(request: VerifyOtpRequest):
     """
-    Verifies 6-digit OTP code against stored OTP and enforces 15-minute expiration window.
+    Verifies 6-digit OTP code against stored OTP in Firestore / memory and enforces 15-minute expiration window.
     """
     formatted_phone = normalize_indian_phone(request.phone)
+    user_otp = request.otp.strip()
 
     otp_data = OTP_STORAGE.get(formatted_phone)
-    user_otp = request.otp.strip()
+
+    # Fetch from Firestore if not present in memory cache
+    if not otp_data and db_firestore:
+        try:
+            doc_ref = db_firestore.collection("otps").document(formatted_phone)
+            doc = doc_ref.get()
+            if doc.exists:
+                otp_data = doc.to_dict()
+                logger.info(f"Fetched active OTP from Firestore 'otps' collection for {formatted_phone}")
+        except Exception as fs_read_err:
+            logger.warning(f"Firestore OTP document read error: {fs_read_err}")
 
     if not otp_data:
         return {"success": False, "message": "No active OTP request found for this number. Please request a new OTP."}
 
-    expected_code = otp_data["code"]
-    expires_at = otp_data["expires_at"]
+    expected_code = str(otp_data.get("code", ""))
+    expires_at = float(otp_data.get("expires_at", 0))
 
     if time.time() > expires_at:
         return {"success": False, "message": "OTP code has expired after 15 minutes. Please request a new OTP."}
@@ -327,10 +368,41 @@ async def verify_sms_otp(request: VerifyOtpRequest):
     if not is_valid:
         return {"success": False, "message": "Invalid OTP code. Please try again."}
 
-    # Clear OTP once verified
+    # Clear OTP from memory and mark verified in Firestore
     OTP_STORAGE.pop(formatted_phone, None)
+    if db_firestore:
+        try:
+            doc_ref = db_firestore.collection("otps").document(formatted_phone)
+            doc_ref.update({"verified": True})
+            logger.info(f"Marked OTP as verified in Firestore 'otps' collection for {formatted_phone}")
+        except Exception as fs_update_err:
+            logger.warning(f"Firestore OTP verify update error: {fs_update_err}")
 
     return {"success": True, "message": "OTP verified successfully", "phone": formatted_phone}
+
+@app.get("/sms/otp-status/{phone}", status_code=status.HTTP_200_OK)
+async def get_otp_status(phone: str):
+    """
+    Fetch active OTP metadata from Firestore 'otps' collection.
+    """
+    formatted_phone = normalize_indian_phone(phone)
+    if db_firestore:
+        try:
+            doc_ref = db_firestore.collection("otps").document(formatted_phone)
+            doc = doc_ref.get()
+            if doc.exists:
+                data = doc.to_dict()
+                return {
+                    "success": True,
+                    "phone": formatted_phone,
+                    "expires_at": data.get("expires_at"),
+                    "verified": data.get("verified", False),
+                    "created_at": data.get("created_at")
+                }
+        except Exception as e:
+            logger.warning(f"Firestore status fetch error: {e}")
+
+    return {"success": False, "message": "No OTP record found in Firestore."}
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check(raw_request: Request):
