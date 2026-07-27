@@ -283,8 +283,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           GoogleLogo(size: 16),
-                          SizedBox(width: 8),
-                          Text('Google Account'),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Google',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -293,8 +299,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.phone_android, size: 16),
-                          SizedBox(width: 8),
-                          Text('Phone SMS'),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Phone SMS',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
                         ],
                       ),
                     ),

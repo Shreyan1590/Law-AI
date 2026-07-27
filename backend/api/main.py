@@ -65,12 +65,22 @@ async def add_cors_headers(request: Request, call_next):
             status_code=200,
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Methods": "*",
                 "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "86400",
             },
         )
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        logger.error(f"Unhandled endpoint error: {exc}")
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": str(exc)},
+        )
     response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
 import hashlib
