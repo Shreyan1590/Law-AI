@@ -376,9 +376,13 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
         except Exception as fs_err:
             logger.warning(f"Firestore OTP write error: {fs_err}")
 
+    message_str = f"OTP sent successfully via {provider_used}."
+    if not dispatch_success:
+        message_str = "SMS delivery failed. Check your Firebase Console 'otps' collection to retrieve the code."
+
     return {
         "success": True,
-        "message": f"OTP sent successfully via {provider_used}" if dispatch_success else "OTP generated and saved in Firestore",
+        "message": message_str,
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}",
         "expires_in_seconds": 300
