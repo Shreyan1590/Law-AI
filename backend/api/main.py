@@ -298,10 +298,6 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "").strip()
     sms_gate_url = os.getenv("SMS_GATE_URL", "").strip() or "https://api.sms-gate.app/3rdparty/v1/message/send"
 
-    # Fallback Textbee credentials securely read from environment variables
-    textbee_api_key = (os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")).strip()
-    textbee_device_id = (os.getenv("TEXTBEE_DEVICE_ID", "") or "670cd7e91458df8a2ea17f7d").strip()
-
     provider_used = "Firestore Local Storage"
     dispatch_success = False
 
@@ -335,24 +331,6 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                     logger.warning(f"SMS Gate notice ({resp.status_code}): {resp.text}")
         except Exception as err:
             logger.warning(f"SMS Gate network notice: {err}")
-
-    # Fallback to Textbee if SMS Gate was not successful or not fully configured
-    if not dispatch_success and textbee_api_key and textbee_device_id:
-        import httpx
-        textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device_id}/send-sms"
-        headers = {"Content-Type": "application/json", "x-api-key": textbee_api_key}
-        payload = {"recipients": [formatted_phone], "message": professional_message}
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.post(textbee_url, headers=headers, json=payload)
-                logger.info(f"Textbee API status: {resp.status_code}, response: {resp.text}")
-                if 200 <= resp.status_code < 300:
-                    dispatch_success = True
-                    provider_used = "Textbee SMS Gateway"
-                else:
-                    logger.warning(f"Textbee notice ({resp.status_code}): {resp.text}")
-        except Exception as err:
-            logger.warning(f"Textbee network notice: {err}")
 
     # 4. Record rate-limit timestamp & save in-memory cache
     OTP_RATE_LIMIT[formatted_phone] = now
