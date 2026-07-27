@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import json
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
@@ -12,11 +13,13 @@ from rag_pipeline.d1_client import D1Client
 
 # Paths
 CHROMA_DB_DIR = str(Path(__file__).resolve().parents[1] / "chroma_db")
+ARTICLES_INDEX_PATH = Path(__file__).resolve().parents[1] / "data" / "articles_index.json"
 
 # Cache embeddings model to avoid reloading on every import
 _embeddings = None
 _vector_store = None
 _d1_client = None
+_article_index = None
 
 ARTICLE_REFERENCE_PATTERN = re.compile(
     r'\b(?:article\s+number|article\s+no\.?|article|articles|art\.?|arts\.?)\s*(\d+[A-Z]?)\b',
@@ -66,10 +69,66 @@ def _format_article_row(row, score: float = 1.0) -> dict:
         "score": score
     }
 
+def _article_sort_key(number: str) -> tuple[int, str]:
+    match = re.match(r"(\d+)([A-Z]*)", str(number))
+    if not match:
+        return (9999, str(number))
+    return (int(match.group(1)), match.group(2))
+
+def _load_article_index() -> list[dict]:
+    global _article_index
+    if _article_index is not None:
+        return _article_index
+    if not ARTICLES_INDEX_PATH.exists():
+        _article_index = []
+        return _article_index
+    try:
+        with ARTICLES_INDEX_PATH.open("r", encoding="utf-8") as handle:
+            raw_rows = json.load(handle)
+        _article_index = [
+            {
+                "number": str(row.get("number", "")).strip(),
+                "title": str(row.get("title", "")).strip(),
+                "part": str(row.get("part", "")).strip(),
+                "content": str(row.get("content", "")).strip(),
+                "type": str(row.get("type", "article")).strip() or "article",
+            }
+            for row in raw_rows
+            if row.get("number") and row.get("content")
+        ]
+    except Exception as exc:
+        print(f"Warning: Could not load article index: {exc}")
+        _article_index = []
+    return _article_index
+
+def _format_index_row(row: dict, score: float = 1.0) -> dict:
+    return {
+        "content": row["content"],
+        "metadata": {
+            "number": str(row["number"]),
+            "title": row["title"],
+            "part": row["part"],
+            "type": row["type"],
+        },
+        "score": score,
+    }
+
+def _exact_article_docs_from_index(article_numbers: list[str]) -> list[dict]:
+    indexed_articles = {
+        str(row["number"]).upper(): row
+        for row in _load_article_index()
+        if str(row.get("type", "article")).lower() == "article"
+    }
+    return [
+        _format_index_row(indexed_articles[number], score=1.0)
+        for number in article_numbers
+        if number in indexed_articles
+    ]
+
 def _keyword_list(query: str) -> list[str]:
     stop_words = {
         "about", "article", "articles", "explain", "match", "matching", "please",
-        "show", "tell", "what", "which", "with", "from", "give", "simple",
+        "show", "tell", "what", "which", "with", "from", "give", "simple", "right",
     }
     keywords: list[str] = []
     seen = set()
@@ -101,11 +160,12 @@ def _keyword_search_d1(d1: D1Client, query: str, k: int) -> list[dict]:
         like = f"%{keyword}%"
         score_parts.append(
             "(CASE WHEN LOWER(title) LIKE LOWER(?) THEN 3 ELSE 0 END + "
+            "CASE WHEN LOWER(part) LIKE LOWER(?) THEN 2 ELSE 0 END + "
             "CASE WHEN LOWER(content) LIKE LOWER(?) THEN 1 ELSE 0 END)"
         )
-        score_params.extend([like, like])
-        where_parts.append("(LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))")
-        where_params.extend([like, like])
+        score_params.extend([like, like, like])
+        where_parts.append("(LOWER(title) LIKE LOWER(?) OR LOWER(part) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))")
+        where_params.extend([like, like, like])
 
     sql = (
         "SELECT number, title, part, content, type, "
@@ -118,12 +178,42 @@ def _keyword_search_d1(d1: D1Client, query: str, k: int) -> list[dict]:
     )
 
     rows = d1.execute(sql, score_params + where_params + [k])
-    max_score = max(len(keywords) * 4, 1)
+    max_score = max(len(keywords) * 6, 1)
     results = []
     for row in rows:
         score = min(float(row.get("match_score", 1)) / max_score, 1.0)
         results.append(_format_article_row(row, score=score))
     return results
+
+def _keyword_search_index(query: str, k: int) -> list[dict]:
+    keywords = _keyword_list(query)
+    if not keywords:
+        return []
+
+    scored_rows = []
+    max_score = max(len(keywords) * 6, 1)
+    for row in _load_article_index():
+        if str(row.get("type", "article")).lower() != "article":
+            continue
+        title = row.get("title", "").lower()
+        part = row.get("part", "").lower()
+        content = row.get("content", "").lower()
+        score = 0
+        for keyword in keywords:
+            if keyword in title:
+                score += 3
+            if keyword in part:
+                score += 2
+            if keyword in content:
+                score += 1
+        if score:
+            scored_rows.append((score, row))
+
+    scored_rows.sort(key=lambda item: (-item[0], _article_sort_key(item[1].get("number", ""))))
+    return [
+        _format_index_row(row, score=min(score / max_score, 1.0))
+        for score, row in scored_rows[:k]
+    ]
 
 def get_d1_client():
     global _d1_client
@@ -230,9 +320,14 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
         exact_article_docs = []
         print(f"Detected exact article query for: {', '.join('Article ' + n for n in article_numbers)}")
 
+        indexed_docs = _exact_article_docs_from_index(article_numbers)
+        exact_article_docs.extend(indexed_docs)
+        found_numbers = {str(doc["metadata"].get("number")) for doc in exact_article_docs}
+        missing_numbers = [target_number for target_number in article_numbers if target_number not in found_numbers]
+
         try:
-            if d1.is_configured():
-                for target_number in article_numbers:
+            if missing_numbers and d1.is_configured():
+                for target_number in missing_numbers:
                     sql = "SELECT number, title, part, content, type FROM articles WHERE number = ? AND type = 'article' LIMIT 1"
                     rows = d1.execute(sql, [str(target_number)])
                     if rows:
@@ -244,6 +339,8 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
         found_numbers = {str(doc["metadata"].get("number")) for doc in exact_article_docs}
         missing_numbers = [target_number for target_number in article_numbers if target_number not in found_numbers]
         if missing_numbers:
+            if os.getenv("ENABLE_CHROMA_FALLBACK", "").strip().lower() not in {"1", "true", "yes"}:
+                return exact_article_docs
             try:
                 db = get_vector_store()
                 for target_number in missing_numbers:
@@ -269,7 +366,12 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
 
         return exact_article_docs
             
-    # 2. Prefer fast D1 keyword search on Render/local deployments when possible.
+    # 2. Prefer the committed lightweight index on Render/local deployments.
+    indexed_keyword_results = _keyword_search_index(query, k)
+    if indexed_keyword_results:
+        return indexed_keyword_results[:k]
+
+    # 3. D1 keyword fallback for deployments that intentionally keep the index empty.
     try:
         d1_keyword_results = _keyword_search_d1(d1, query, k)
         if d1_keyword_results:
@@ -277,7 +379,10 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
     except Exception as e:
         print(f"Warning: D1 keyword search failed: {e}. Falling back to Chroma.")
 
-    # 3. Similarity search using Chroma
+    if os.getenv("ENABLE_CHROMA_FALLBACK", "").strip().lower() not in {"1", "true", "yes"}:
+        return []
+
+    # 4. Similarity search using Chroma
     db = get_vector_store()
     try:
         results = db.similarity_search_with_relevance_scores(query, k=k)

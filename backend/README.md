@@ -18,6 +18,7 @@ Create a file named `.env` in the `backend/` directory:
 GOOGLE_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
 D1_REQUEST_TIMEOUT_SECONDS=8
+ENABLE_CHROMA_FALLBACK=false
 TEXTBEE_API_KEY=your_textbee_api_key_here
 TEXTBEE_DEVICE_ID=your_textbee_device_id_here
 ```
@@ -92,7 +93,7 @@ Configure the web service details:
 2. Click **Add Environment Variable**.
 3. Set Key to `GOOGLE_API_KEY` and Value to your actual Gemini API key.
 4. Add `TEXTBEE_API_KEY` and `TEXTBEE_DEVICE_ID` from your Textbee dashboard so `/sms/send-otp` can dispatch OTP messages.
-5. Keep `GEMINI_MODEL=gemini-2.5-flash` and `D1_REQUEST_TIMEOUT_SECONDS=8` unless you intentionally want a different model or timeout.
+5. Keep `GEMINI_MODEL=gemini-2.5-flash`, `D1_REQUEST_TIMEOUT_SECONDS=8`, and `ENABLE_CHROMA_FALLBACK=false` unless you intentionally want a different model, timeout, or local vector fallback.
 6. Click **Create Web Service**.
 
 ### Step 5: Accessing Your Public API URL

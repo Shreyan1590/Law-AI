@@ -21,3 +21,5 @@ services:
         value: gemini-2.5-flash
       - key: D1_REQUEST_TIMEOUT_SECONDS
         value: 8
+      - key: ENABLE_CHROMA_FALLBACK
+        value: "false"

@@ -201,7 +201,7 @@ def _article_citations(docs: list[dict]) -> list[str]:
         if citation not in seen:
             seen.add(citation)
             citations.append(citation)
-    return sorted(citations, key=_citation_sort_key)
+    return citations
 
 
 def _retrieved_articles(docs: list[dict]) -> list[dict[str, str]]:
