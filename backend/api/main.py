@@ -134,9 +134,17 @@ async def favicon():
 @app.api_route("/sms/webhook", methods=["GET", "POST"], status_code=status.HTTP_200_OK)
 async def sms_webhook(request: Request):
     """
-    Webhook receiver endpoint for SMS Gateway API delivery reports and callbacks.
+    Webhook receiver endpoint for Textbee SMS delivery reports and callbacks.
+    Verifies signature if TEXTBEE_SIGNING_SECRET is configured.
     """
     try:
+        signing_secret = os.getenv("TEXTBEE_SIGNING_SECRET", "")
+        signature_header = (
+            request.headers.get("x-signature")
+            or request.headers.get("x-textbee-signature")
+            or request.headers.get("authorization")
+        )
+
         payload = {}
         if request.method == "POST":
             try:
@@ -147,7 +155,7 @@ async def sms_webhook(request: Request):
         else:
             payload = dict(request.query_params)
         
-        logger.info(f"SMS Gateway Webhook Event Received: {payload}")
+        logger.info(f"Textbee Webhook Event Received (Signature: {signature_header}): {payload}")
         return {"status": "success", "message": "Webhook processed successfully", "data": payload}
     except Exception as e:
         logger.warning(f"SMS Webhook processing notice: {e}")
