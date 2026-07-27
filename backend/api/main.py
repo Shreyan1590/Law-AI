@@ -296,7 +296,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     sms_gate_user = os.getenv("SMS_GATE_USERNAME", "").strip()
     sms_gate_pass = os.getenv("SMS_GATE_PASSWORD", "").strip()
     sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "").strip()
-    sms_gate_url = os.getenv("SMS_GATE_URL", "").strip() or "https://api.sms-gate.app/3rdparty/v1/message/send"
+    sms_gate_url = os.getenv("SMS_GATE_URL", "").strip() or "https://api.sms-gate.app/mobile/v1/message/send"
 
     provider_used = "Firestore Local Storage"
     dispatch_success = False
