@@ -236,10 +236,10 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     formatted_phone = normalize_indian_phone(phoneNumber)
     now = time.time()
 
-    # 1. Rate Limiting Check (60s cooldown per phone number)
+    # 1. Rate Limiting Check (20s cooldown per phone number)
     last_sent = OTP_RATE_LIMIT.get(formatted_phone, 0)
-    if now - last_sent < 60:
-        remaining = int(60 - (now - last_sent))
+    if now - last_sent < 20:
+        remaining = int(20 - (now - last_sent))
         logger.warning(f"Rate-limit triggered for {formatted_phone}. Cooldown remaining: {remaining}s")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -372,7 +372,17 @@ async def send_sms_otp(request: SendOtpRequest):
     """
     Endpoint handler to generate and dispatch OTP via generateAndSendOTP service.
     """
-    return await generateAndSendOTP(request.phone)
+    try:
+        return await generateAndSendOTP(request.phone)
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={
+                "success": False,
+                "message": e.detail,
+                "detail": e.detail
+            }
+        )
 
 @app.post("/sms/verify-otp", status_code=status.HTTP_200_OK)
 async def verify_sms_otp(request: VerifyOtpRequest):
