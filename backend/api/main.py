@@ -204,8 +204,11 @@ except Exception as fs_init_err:
     logger.warning(f"Firestore initialization notice (operating with local fallback cache): {fs_init_err}")
     db_firestore = None
 
-# In-memory OTP Cache Fallback: phone -> {"code": otp_code, "expires_at": timestamp}
+# In-memory OTP Cache & Rate Limiting
+# OTP_STORAGE: phone -> {"code": otp_code, "expires_at": timestamp}
+# OTP_RATE_LIMIT: phone -> last_request_timestamp
 OTP_STORAGE = {}
+OTP_RATE_LIMIT = {}
 
 def normalize_indian_phone(phone: str) -> str:
     clean_digits = ''.join(ch for ch in phone.strip() if ch.isdigit())
@@ -224,6 +227,142 @@ class SendOtpRequest(BaseModel):
 class VerifyOtpRequest(BaseModel):
     phone: str = Field(..., description="Mobile number formatted with +91")
     otp: str = Field(..., description="6-digit OTP code")
+
+async def generateAndSendOTP(phoneNumber: str) -> dict:
+    """
+    Service function to generate a secure 6-digit OTP, enforce 60s rate limiting,
+    store the OTP in Cloud Firestore ('otps' collection) & memory with 5-minute expiration,
+    and dispatch an SMS via SMS Gateway for Android API (https://sms-gate.app).
+    """
+    formatted_phone = normalize_indian_phone(phoneNumber)
+    now = time.time()
+
+    # 1. Rate Limiting Check (60s cooldown per phone number)
+    last_sent = OTP_RATE_LIMIT.get(formatted_phone, 0)
+    if now - last_sent < 60:
+        remaining = int(60 - (now - last_sent))
+        logger.warning(f"Rate-limit triggered for {formatted_phone}. Cooldown remaining: {remaining}s")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many OTP requests for {formatted_phone}. Please wait {remaining} seconds before trying again."
+        )
+
+    # 2. Generate secure 6-digit OTP & 5-minute absolute expiration (300 seconds)
+    otp_code = str(random.randint(100000, 999999))
+    expires_at = now + 300  # 5 minutes
+
+    # Professional OTP text formatting
+    professional_message = (
+        f"Arasamaippu AI: Your verification code is {otp_code}. "
+        f"Valid for 5 minutes. Please do not share this code with anyone."
+    )
+
+    # 3. Read SMS Gateway credentials securely from environment variables (.env)
+    sms_gate_user = os.getenv("SMS_GATE_USERNAME", "")
+    sms_gate_pass = os.getenv("SMS_GATE_PASSWORD", "")
+    sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "")
+
+    # Fallback Textbee credentials
+    textbee_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
+    textbee_device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
+
+    provider_used = "SMS Gateway (sms-gate.app)"
+
+    if sms_gate_user and sms_gate_pass and sms_gate_device_id:
+        import httpx
+        sms_gate_url = "https://sms-gate.app/3rdparty/v1/message/send"
+        params = {
+            "skipPhoneValidation": "true",
+            "deviceActiveWithin": "12"
+        }
+        payload = {
+            "textMessage": {"text": professional_message},
+            "deviceId": sms_gate_device_id,
+            "phoneNumbers": [formatted_phone],
+            "simNumber": 1
+        }
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.post(
+                    sms_gate_url,
+                    params=params,
+                    json=payload,
+                    auth=(sms_gate_user, sms_gate_pass),
+                    headers={"Content-Type": "application/json"}
+                )
+                logger.info(f"SMS Gate API status: {resp.status_code}, response: {resp.text}")
+                if not 200 <= resp.status_code < 300:
+                    logger.error(f"SMS Gate API error ({resp.status_code}): {resp.text}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"SMS Gateway rejected OTP dispatch ({resp.status_code})."
+                    )
+        except Exception as err:
+            if isinstance(err, HTTPException):
+                raise err
+            logger.error(f"Network error dispatching SMS via SMS Gate: {err}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Network failure connecting to SMS Gateway service."
+            )
+    elif textbee_api_key and textbee_device_id:
+        provider_used = "Textbee API"
+        import httpx
+        textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device_id}/send-sms"
+        headers = {"Content-Type": "application/json", "x-api-key": textbee_api_key}
+        payload = {"recipients": [formatted_phone], "message": professional_message}
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.post(textbee_url, headers=headers, json=payload)
+                if not 200 <= resp.status_code < 300:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Textbee rejected OTP request ({resp.status_code})."
+                    )
+        except Exception as err:
+            if isinstance(err, HTTPException):
+                raise err
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Network failure connecting to Textbee service."
+            )
+    else:
+        logger.error("No valid SMS Gateway credentials configured in server environment.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SMS service is not configured. Please set SMS_GATE_USERNAME, SMS_GATE_PASSWORD, and SMS_GATE_DEVICE_ID in .env."
+        )
+
+    # 4. Record rate-limit timestamp & save in-memory cache
+    OTP_RATE_LIMIT[formatted_phone] = now
+    OTP_STORAGE[formatted_phone] = {
+        "code": otp_code,
+        "expires_at": expires_at
+    }
+
+    # 5. Save document in Cloud Firestore ('otps' collection)
+    if db_firestore:
+        try:
+            doc_ref = db_firestore.collection("otps").document(formatted_phone)
+            doc_ref.set({
+                "phone": formatted_phone,
+                "code": otp_code,
+                "expires_at": expires_at,
+                "created_at": now,
+                "verified": False,
+                "provider": provider_used
+            })
+            logger.info(f"Saved 5-minute OTP for {formatted_phone} in Firestore 'otps' collection")
+        except Exception as fs_err:
+            logger.warning(f"Firestore OTP document write error: {fs_err}")
+
+    return {
+        "success": True,
+        "message": f"OTP sent successfully via {provider_used} and saved in Firestore",
+        "phone": formatted_phone,
+        "verification_id": f"vid_{formatted_phone}",
+        "expires_in_seconds": 300
+    }
 
 @app.get("/sms/send-otp", status_code=status.HTTP_200_OK)
 async def send_sms_otp_info():
@@ -245,93 +384,9 @@ async def send_sms_otp_info():
 @app.post("/sms/send-otp", status_code=status.HTTP_200_OK)
 async def send_sms_otp(request: SendOtpRequest):
     """
-    Sends 6-digit OTP via Textbee API using TEXTBEE_API_KEY & TEXTBEE_DEVICE_ID from environment variables (Render / .env).
-    Saves OTP into Cloud Firestore 'otps' collection with 15-minute expiration.
+    Endpoint handler to generate and dispatch OTP via generateAndSendOTP service.
     """
-    formatted_phone = normalize_indian_phone(request.phone)
-
-    # Fetch TEXTBEE_API_KEY and TEXTBEE_DEVICE_ID from environment variables
-    sms_api_key = os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")
-    device_id = os.getenv("TEXTBEE_DEVICE_ID", "")
-
-    if not sms_api_key or not device_id:
-        missing_values = []
-        if not sms_api_key:
-            missing_values.append("TEXTBEE_API_KEY")
-        if not device_id:
-            missing_values.append("TEXTBEE_DEVICE_ID")
-        logger.error(f"SMS OTP service is not configured. Missing: {', '.join(missing_values)}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMS OTP service is not configured on the server."
-        )
-
-    # Generate 6-digit OTP.
-    otp_code = str(random.randint(100000, 999999))
-    expires_at = time.time() + 900  # 15 minutes
-
-    # Professional OTP SMS Message
-    professional_message = (
-        f"Arasamaippu AI: Your one-time verification code (OTP) is {otp_code}. "
-        f"Valid for 15 minutes. Please do not share this code with anyone."
-    )
-
-    # Dispatch HTTP POST request to Textbee SMS API
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
-            headers = {
-                "Content-Type": "application/json",
-                "x-api-key": sms_api_key,
-            }
-            payload = {
-                "recipients": [formatted_phone],
-                "message": professional_message
-            }
-            resp = await client.post(textbee_url, headers=headers, json=payload)
-            logger.info(f"Textbee SMS API dispatch status: {resp.status_code}, response: {resp.text}")
-            if not 200 <= resp.status_code < 300:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"SMS provider rejected the OTP request ({resp.status_code})."
-                )
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        logger.warning(f"Textbee SMS dispatch failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="SMS provider could not send the OTP right now."
-        )
-
-    # Store OTP in-memory
-    OTP_STORAGE[formatted_phone] = {
-        "code": otp_code,
-        "expires_at": expires_at
-    }
-
-    # Save/Over-write OTP document in Cloud Firestore 'otps' collection
-    if db_firestore:
-        try:
-            doc_ref = db_firestore.collection("otps").document(formatted_phone)
-            doc_ref.set({
-                "phone": formatted_phone,
-                "code": otp_code,
-                "expires_at": expires_at,
-                "created_at": time.time(),
-                "verified": False
-            })
-            logger.info(f"Saved OTP document into Firestore 'otps' collection for {formatted_phone}")
-        except Exception as fs_save_err:
-            logger.warning(f"Firestore OTP document write error: {fs_save_err}")
-
-    return {
-        "success": True,
-        "message": "OTP sent successfully via Textbee and saved in Firestore",
-        "phone": formatted_phone,
-        "verification_id": f"vid_{formatted_phone}"
-    }
+    return await generateAndSendOTP(request.phone)
 
 @app.post("/sms/verify-otp", status_code=status.HTTP_200_OK)
 async def verify_sms_otp(request: VerifyOtpRequest):
