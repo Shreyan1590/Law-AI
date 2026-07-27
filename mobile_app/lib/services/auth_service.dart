@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'api_service.dart';
 
 class AuthService {
   static const String _keyIsLoggedIn = 'auth_is_logged_in';
@@ -14,10 +15,6 @@ class AuthService {
   static const String _keyOnboardingComplete = 'auth_onboarding_complete';
 
   static const String _webClientId = '1063410976132-oiq963qr654635lt75hn7dasp9cg8r7j.apps.googleusercontent.com';
-  static const String _smsApiKey = String.fromEnvironment(
-    'SMS_API_KEY',
-    defaultValue: 'sk_live_' '68a5bc15847b74ac20bc2d0fec9eef6ede448c36a376e4b62584dba2e1d720fe',
-  );
   static final Map<String, String> _activeOtpCodes = {};
   static final Map<String, String> _verificationToPhone = {};
 
@@ -138,26 +135,17 @@ class AuthService {
       _activeOtpCodes[formattedPhone] = generatedOtp;
       _verificationToPhone[verificationId] = formattedPhone;
 
-      // Dispatch SMS Gateway API request
+      // Dispatch backend API request to send SMS OTP using server environment key
       try {
-        final url = Uri.parse('https://api.smsgatewayapi.com/v1/message/send');
+        final url = Uri.parse('${ApiService.baseUrl}/sms/send-otp');
         final response = await http.post(
           url,
-          headers: {
-            'Authorization': 'Bearer $_smsApiKey',
-            'X-API-Key': _smsApiKey,
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'receiver': formattedPhone,
-            'message': 'Your OTP for Arasamaippu AI is: $generatedOtp. Valid for 10 minutes.',
-            'phone': formattedPhone,
-            'otp': generatedOtp,
-          }),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': formattedPhone}),
         );
-        debugPrint('SMS Gateway API response status: ${response.statusCode}, body: ${response.body}');
+        debugPrint('Backend SMS OTP endpoint status: ${response.statusCode}, body: ${response.body}');
       } catch (smsErr) {
-        debugPrint('SMS Gateway API request notice: $smsErr');
+        debugPrint('Backend SMS OTP endpoint notice: $smsErr');
       }
 
       // Also trigger Firebase Phone Auth as web/mobile fallback if supported
