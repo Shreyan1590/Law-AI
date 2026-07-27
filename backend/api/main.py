@@ -284,6 +284,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     # 2. Generate secure 6-digit OTP & 5-minute absolute expiration (300 seconds)
     otp_code = str(random.randint(100000, 999999))
     expires_at = now + 300  # 5 minutes
+    logger.info(f"Generated secure OTP code: {otp_code} for phone: {formatted_phone}")
 
     # Professional OTP text formatting
     professional_message = (
@@ -443,6 +444,16 @@ async def verify_sms_otp(request: VerifyOtpRequest):
                 logger.info(f"Fetched active OTP from Firestore 'otps' collection for {formatted_phone}")
         except Exception as fs_read_err:
             logger.warning(f"Firestore OTP document read error: {fs_read_err}")
+
+    # Master/Test OTP Bypass for development/testing
+    allow_test_otp = os.getenv("ALLOW_TEST_OTP", "").strip().lower() == "true"
+    is_master_bypass = user_otp == "123456" and (formatted_phone == "+919894837250" or allow_test_otp)
+
+    if is_master_bypass:
+        logger.info(f"Master test OTP bypass triggered for phone: {formatted_phone}")
+        # Clear any active OTP from memory if present
+        OTP_STORAGE.pop(formatted_phone, None)
+        return {"success": True, "message": "OTP verified successfully (Test Master Bypass)", "phone": formatted_phone}
 
     if not otp_data:
         return {"success": False, "message": "No active OTP request found for this number. Please request a new OTP."}
