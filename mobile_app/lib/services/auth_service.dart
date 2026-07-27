@@ -84,7 +84,13 @@ class AuthService {
         try {
           googleUser = await GoogleSignIn.instance.authenticate();
         } catch (authErr) {
-          debugPrint('Google authenticate notice: $authErr');
+          debugPrint('Google authenticate initial notice: $authErr');
+          try {
+            await GoogleSignIn.instance.signOut();
+            googleUser = await GoogleSignIn.instance.authenticate();
+          } catch (retryErr) {
+            debugPrint('Google authenticate retry notice: $retryErr');
+          }
         }
 
         if (googleUser == null) {

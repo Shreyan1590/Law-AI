@@ -53,26 +53,16 @@ class _SignupScreenState extends State<SignupScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    final currentUser = _authService.currentUser;
-    if (currentUser != null) {
+    if (widget.initialEmail?.isNotEmpty == true || widget.initialPhone?.isNotEmpty == true) {
       _authenticated = true;
-      final email = (widget.initialEmail?.isNotEmpty == true)
-          ? widget.initialEmail!
-          : (currentUser.email ?? '');
-      final name = (currentUser.displayName?.isNotEmpty == true)
-          ? currentUser.displayName!
-          : (widget.initialName ?? '');
-      final phone = (widget.initialPhone?.isNotEmpty == true)
-          ? widget.initialPhone!
-          : (currentUser.phoneNumber ?? '');
-
-      _nameController = TextEditingController(text: name);
-      _emailController = TextEditingController(text: email);
-      _phoneController = TextEditingController(text: phone);
+      _nameController = TextEditingController(text: widget.initialName ?? '');
+      _emailController = TextEditingController(text: widget.initialEmail ?? '');
+      _phoneController = TextEditingController(text: widget.initialPhone ?? '');
     } else {
-      _nameController = TextEditingController(text: widget.initialName);
-      _emailController = TextEditingController(text: widget.initialEmail);
-      _phoneController = TextEditingController(text: widget.initialPhone);
+      _authenticated = false;
+      _nameController = TextEditingController(text: widget.initialName ?? '');
+      _emailController = TextEditingController(text: widget.initialEmail ?? '');
+      _phoneController = TextEditingController(text: widget.initialPhone ?? '');
     }
   }
 
