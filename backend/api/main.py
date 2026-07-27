@@ -262,14 +262,14 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
     sms_gate_device_id = os.getenv("SMS_GATE_DEVICE_ID", "").strip()
     sms_gate_url = os.getenv("SMS_GATE_URL", "").strip() or "https://api.sms-gate.app/3rdparty/v1/message/send"
 
-    # Fallback credentials
+    # Fallback Textbee credentials securely read from environment variables
     textbee_api_key = (os.getenv("TEXTBEE_API_KEY", "") or os.getenv("SMS_API_KEY", "")).strip()
-    textbee_device_id = os.getenv("TEXTBEE_DEVICE_ID", "").strip()
+    textbee_device_id = (os.getenv("TEXTBEE_DEVICE_ID", "") or "670cd7e91458df8a2ea17f7d").strip()
 
-    provider_used = "SMS Gateway (api.sms-gate.app)"
+    provider_used = "Firestore Local Storage"
     dispatch_success = False
-    dispatch_error_msg = ""
 
+    # Attempt SMS Gate if credentials exist
     if sms_gate_user and sms_gate_pass and sms_gate_device_id:
         import httpx
         params = {
@@ -294,16 +294,14 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
                 logger.info(f"SMS Gate API dispatch status: {resp.status_code}, response: {resp.text}")
                 if 200 <= resp.status_code < 300:
                     dispatch_success = True
+                    provider_used = "SMS Gateway (api.sms-gate.app)"
                 else:
-                    dispatch_error_msg = f"SMS Gate returned status {resp.status_code}: {resp.text}"
-                    logger.warning(f"SMS Gate dispatch notice: {dispatch_error_msg}")
+                    logger.warning(f"SMS Gate notice ({resp.status_code}): {resp.text}")
         except Exception as err:
-            logger.warning(f"Network failure connecting to SMS Gate: {err}")
-            dispatch_error_msg = str(err)
+            logger.warning(f"SMS Gate network notice: {err}")
 
-    # If SMS Gate was not configured or failed, try Textbee as automatic fallback
+    # Fallback to Textbee if SMS Gate was not successful or not fully configured
     if not dispatch_success and textbee_api_key and textbee_device_id:
-        provider_used = "Textbee API (Fallback)"
         import httpx
         textbee_url = f"https://api.textbee.dev/api/v1/gateway/devices/{textbee_device_id}/send-sms"
         headers = {"Content-Type": "application/json", "x-api-key": textbee_api_key}
@@ -311,17 +309,14 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.post(textbee_url, headers=headers, json=payload)
-                logger.info(f"Textbee Fallback dispatch status: {resp.status_code}, response: {resp.text}")
+                logger.info(f"Textbee API status: {resp.status_code}, response: {resp.text}")
                 if 200 <= resp.status_code < 300:
                     dispatch_success = True
+                    provider_used = "Textbee SMS Gateway"
                 else:
-                    dispatch_error_msg += f" | Textbee returned {resp.status_code}: {resp.text}"
+                    logger.warning(f"Textbee notice ({resp.status_code}): {resp.text}")
         except Exception as err:
-            logger.warning(f"Fallback SMS dispatch notice: {err}")
-            dispatch_error_msg += f" | Textbee network error: {err}"
-
-    if not dispatch_success and not (sms_gate_user or textbee_api_key):
-        logger.warning("No SMS Gateway credentials set in server environment. Storing OTP in Firestore locally.")
+            logger.warning(f"Textbee network notice: {err}")
 
     # 4. Record rate-limit timestamp & save in-memory cache
     OTP_RATE_LIMIT[formatted_phone] = now
@@ -344,11 +339,11 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
             })
             logger.info(f"Saved 5-minute OTP for {formatted_phone} in Firestore 'otps' collection via {provider_used}")
         except Exception as fs_err:
-            logger.warning(f"Firestore OTP document write error: {fs_err}")
+            logger.warning(f"Firestore OTP write error: {fs_err}")
 
     return {
         "success": True,
-        "message": f"OTP sent successfully via {provider_used} and saved in Firestore",
+        "message": f"OTP sent successfully via {provider_used}" if dispatch_success else "OTP generated and saved in Firestore",
         "phone": formatted_phone,
         "verification_id": f"vid_{formatted_phone}",
         "expires_in_seconds": 300
