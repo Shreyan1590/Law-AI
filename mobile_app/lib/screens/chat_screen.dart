@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../widgets/app_logo.dart';
 import '../services/auth_service.dart';
 import '../services/history_service.dart';
+import '../widgets/shimmer_loading.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -242,27 +243,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // Loading Indicator
           if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    'Thinking clearly...',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
+            const TypingIndicator(),
 
           // Input field and send button
           _buildInputArea(theme),

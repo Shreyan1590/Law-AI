@@ -4,6 +4,7 @@ import '../widgets/app_logo.dart';
 import '../widgets/google_logo.dart';
 import 'signup_screen.dart';
 
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -199,6 +200,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final isSessionExpired = args != null && args['session_expired'] == true;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -233,7 +236,50 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   color: Colors.black54,
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
+
+              // Session Expired Banner
+              if (isSessionExpired) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB), // Amber-50 / Warning BG
+                    borderRadius: BorderRadius.circular(12.0),
+                    border: Border.all(color: const Color(0xFFFDE68A)), // Amber-200
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, color: Color(0xFFF59E0B), size: 24),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Session expired',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF92400E), // Amber-800
+                                fontSize: 14,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Your session has expired. Log in again.',
+                              style: TextStyle(
+                                color: Color(0xFFB45309), // Amber-700
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+
 
               // Error Alert Box
               if (_errorMessage != null) ...[

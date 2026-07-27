@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/google_logo.dart';
+import '../widgets/success_overlay.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialEmail;
@@ -226,14 +227,17 @@ class _SignupScreenState extends State<SignupScreen>
 
     if (result['success'] == true) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Account registered successfully! Welcome to Arasamaippu AI.',
-            ),
-          ),
+        await SuccessOverlay.show(
+          context,
+          title: 'Welcome to Arasamaippu AI!',
+          description: 'Your account has been registered successfully.',
+          actionLabel: 'Get Started',
+          onAction: () {
+            Navigator.of(context).pop(); // Close overlay
+            Navigator.of(context).pushReplacementNamed('/home');
+          },
+          autoDismissDuration: null, // Wait for user tap
         );
-        Navigator.of(context).pushReplacementNamed('/home');
       }
     } else {
       setState(() {

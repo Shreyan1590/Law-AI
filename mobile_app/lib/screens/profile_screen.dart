@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/history_service.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/success_overlay.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -64,11 +65,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirmed == true) {
       await _historyService.clearHistory();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Search history cleared successfully.'),
-            behavior: SnackBarBehavior.floating,
-          ),
+        await SuccessOverlay.show(
+          context,
+          title: 'History cleared!',
+          description: 'All your search history has been removed from this device.',
+          autoDismissDuration: const Duration(seconds: 2),
         );
       }
     }

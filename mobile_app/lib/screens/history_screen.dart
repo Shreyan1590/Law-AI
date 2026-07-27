@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/history_service.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/placeholder_state.dart';
+import '../widgets/shimmer_loading.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -241,24 +243,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerLoading(
+              itemCount: 6,
+              loadingText: 'Loading your search history...',
+            )
           : _historyItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.history,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'No search history yet.',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                    ],
-                  ),
+              ? PlaceholderState.empty(
+                  title: 'No search history yet',
+                  description: 'Your constitutional searches will appear here. Start asking questions to build your history.',
+                  actionLabel: 'Start Exploring',
+                  onAction: () {
+                    // Navigate to Chat tab (index 0)
+                    final shell = context.findAncestorStateOfType<State>();
+                    if (shell != null && shell.mounted) {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  },
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(8.0),
