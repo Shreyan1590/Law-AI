@@ -188,20 +188,55 @@ async def sms_webhook(request: Request):
         return {"status": "success", "message": "Webhook received"}
 
 # Firebase Admin SDK & Firestore Client Initialization
+db_firestore = None
 try:
     import firebase_admin
     from firebase_admin import credentials, firestore
-    if not firebase_admin._apps:
-        # Default initialization targeting Indian Constitution Law Firebase Project
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred, {
-            'projectId': 'indian-constitution-law',
-        })
-    db_firestore = firestore.client()
-    logger.info("Firebase Admin & Cloud Firestore client initialized for 'otps' collection management.")
+    import json
+
+    firebase_sa_env = os.getenv("FIREBASE_SERVICE_ACCOUNT", "").strip()
+    sa_path = None
+    
+    for p in ["firebase-service-account.json", "service-account.json", "backend/firebase-service-account.json"]:
+        if os.path.exists(p):
+            sa_path = p
+            break
+
+    if firebase_sa_env:
+        try:
+            sa_info = json.loads(firebase_sa_env)
+            cred = credentials.Certificate(sa_info)
+            firebase_admin.initialize_app(cred)
+            db_firestore = firestore.client()
+            logger.info("Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT environment variable.")
+        except Exception as sa_err:
+            logger.warning(f"Failed to parse or initialize with FIREBASE_SERVICE_ACCOUNT env: {sa_err}")
+    elif sa_path:
+        try:
+            cred = credentials.Certificate(sa_path)
+            firebase_admin.initialize_app(cred)
+            db_firestore = firestore.client()
+            logger.info(f"Firebase Admin initialized via service account file: {sa_path}")
+        except Exception as sa_file_err:
+            logger.warning(f"Failed to initialize with service account file {sa_path}: {sa_file_err}")
+    else:
+        # Check if we are running in a GCP environment where ADC is natively present without hanging
+        # Usually checking GAE_ENV or K_SERVICE or GCP project ID env
+        if os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GAE_ENV") or os.getenv("K_SERVICE"):
+            try:
+                cred = credentials.ApplicationDefault()
+                firebase_admin.initialize_app(cred, {
+                    'projectId': os.getenv("GOOGLE_CLOUD_PROJECT", "indian-constitution-law"),
+                })
+                db_firestore = firestore.client()
+                logger.info("Firebase Admin initialized via Google Application Default Credentials.")
+            except Exception as adc_err:
+                logger.warning(f"Failed to initialize via ADC in GCP env: {adc_err}")
+        else:
+            logger.info("Firebase Admin: No service account credentials found. Firestore is disabled; falling back to in-memory OTP cache.")
 except Exception as fs_init_err:
     logger.warning(f"Firestore initialization notice (operating with local fallback cache): {fs_init_err}")
-    db_firestore = None
+
 
 # In-memory OTP Cache & Rate Limiting
 # OTP_STORAGE: phone -> {"code": otp_code, "expires_at": timestamp}
@@ -283,7 +318,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
             "simNumber": 1
         }
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.post(
                     sms_gate_url,
                     params=params,
@@ -307,7 +342,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
         headers = {"Content-Type": "application/json", "x-api-key": textbee_api_key}
         payload = {"recipients": [formatted_phone], "message": professional_message}
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.post(textbee_url, headers=headers, json=payload)
                 logger.info(f"Textbee API status: {resp.status_code}, response: {resp.text}")
                 if 200 <= resp.status_code < 300:
