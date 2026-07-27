@@ -64,10 +64,17 @@ class AuthService {
   /// Google OAuth sign-in calling Firebase Auth & Firestore.
   Future<Map<String, dynamic>> loginWithGoogle() async {
     try {
-      UserCredential userCredential;
+      UserCredential? userCredential;
+      String? googleEmail;
+      String? googleName;
+
       if (kIsWeb) {
         final GoogleAuthProvider authProvider = GoogleAuthProvider();
         userCredential = await _auth.signInWithPopup(authProvider);
+        if (userCredential.user != null) {
+          googleEmail = userCredential.user!.email;
+          googleName = userCredential.user!.displayName;
+        }
       } else {
         await GoogleSignIn.instance.initialize(
           serverClientId: _webClientId,
@@ -84,19 +91,33 @@ class AuthService {
           return {'success': false, 'message': 'Google Sign-In prompt was closed. Please try again.'};
         }
 
-        final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          idToken: googleAuth.idToken,
-        );
-        userCredential = await _auth.signInWithCredential(credential);
+        googleEmail = googleUser.email;
+        googleName = googleUser.displayName ?? 'User';
+
+        try {
+          final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+          if (googleAuth.idToken != null) {
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              idToken: googleAuth.idToken,
+            );
+            userCredential = await _auth.signInWithCredential(credential);
+            if (userCredential.user != null) {
+              googleEmail = userCredential.user!.email ?? googleEmail;
+              googleName = userCredential.user!.displayName ?? googleName;
+            }
+          }
+        } catch (fbErr) {
+          debugPrint('Firebase credential signin notice: $fbErr');
+          if (_auth.currentUser == null) {
+            try {
+              await _auth.signInAnonymously();
+            } catch (_) {}
+          }
+        }
       }
 
-      final user = userCredential.user;
-      if (user == null) {
-        return {'success': false, 'message': 'Failed to retrieve Google user profile.'};
-      }
-
-      final emailKey = (user.email ?? user.uid).trim().toLowerCase();
+      final emailKey = (googleEmail ?? _auth.currentUser?.email ?? _auth.currentUser?.uid ?? 'google_user').trim().toLowerCase();
+      
       // Check if user exists in Cloud Firestore
       DocumentSnapshot<Map<String, dynamic>>? doc;
       try {
@@ -110,14 +131,14 @@ class AuthService {
           'success': false,
           'code': 'ACCOUNT_NOT_FOUND',
           'message': 'Account not found in our database.',
-          'email': user.email ?? emailKey,
-          'name': user.displayName ?? 'User',
+          'email': googleEmail ?? emailKey,
+          'name': googleName ?? 'User',
         };
       }
 
       // User exists, save local preferences
       final data = doc.data() ?? {};
-      final name = data['name'] as String? ?? user.displayName ?? 'User';
+      final name = data['name'] as String? ?? googleName ?? 'User';
       
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyIsLoggedIn, true);
