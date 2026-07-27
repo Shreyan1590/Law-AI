@@ -69,10 +69,25 @@ class AuthService {
         final GoogleAuthProvider authProvider = GoogleAuthProvider();
         userCredential = await _auth.signInWithPopup(authProvider);
       } else {
+        // Clear any stale cached sessions before starting new authentication
+        try {
+          await GoogleSignIn.instance.signOut();
+        } catch (_) {}
+
         await GoogleSignIn.instance.initialize(
           serverClientId: _webClientId,
         );
-        final googleUser = await GoogleSignIn.instance.authenticate();
+
+        GoogleSignInAccount? googleUser;
+        try {
+          googleUser = await GoogleSignIn.instance.authenticate();
+        } catch (authErr) {
+          debugPrint('Google authenticate notice: $authErr');
+        }
+
+        if (googleUser == null) {
+          return {'success': false, 'message': 'Google Sign-In prompt was closed. Please try again.'};
+        }
 
         final GoogleSignInAuthentication googleAuth = googleUser.authentication;
         final AuthCredential credential = GoogleAuthProvider.credential(
@@ -82,21 +97,26 @@ class AuthService {
       }
 
       final user = userCredential.user;
-      if (user == null || user.email == null) {
-        return {'success': false, 'message': 'Failed to retrieve Google profile.'};
+      if (user == null) {
+        return {'success': false, 'message': 'Failed to retrieve Google user profile.'};
       }
 
-      final emailKey = user.email!.trim().toLowerCase();
+      final emailKey = (user.email ?? user.uid).trim().toLowerCase();
       // Check if user exists in Cloud Firestore
-      final doc = await FirebaseFirestore.instance.collection('users').doc(emailKey).get();
+      DocumentSnapshot<Map<String, dynamic>>? doc;
+      try {
+        doc = await FirebaseFirestore.instance.collection('users').doc(emailKey).get();
+      } catch (fsErr) {
+        debugPrint('Firestore fetch user notice: $fsErr');
+      }
 
-      if (!doc.exists) {
+      if (doc == null || !doc.exists) {
         return {
           'success': false,
           'code': 'ACCOUNT_NOT_FOUND',
           'message': 'Account not found in our database.',
-          'email': user.email,
-          'name': user.displayName,
+          'email': user.email ?? emailKey,
+          'name': user.displayName ?? 'User',
         };
       }
 
@@ -111,7 +131,11 @@ class AuthService {
 
       return {'success': true};
     } catch (e) {
-      return {'success': false, 'message': 'Google Sign-In error: $e'};
+      String errStr = e.toString();
+      if (errStr.contains('canceled') || errStr.contains('16')) {
+        return {'success': false, 'message': 'Google Sign-In prompt was closed. Please try again.'};
+      }
+      return {'success': false, 'message': 'Google Sign-In error: $errStr'};
     }
   }
 
