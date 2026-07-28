@@ -27,8 +27,13 @@ def startup_event():
     global rag_engine
     rag_engine = RAGEngine()
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
 class QueryRequest(BaseModel):
     question: str
+    chat_history: list[ChatMessage] = []
     email: str = None
 
 class ArticleDetail(BaseModel):
@@ -72,7 +77,9 @@ def ask_question(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
     
     try:
-        response = rag_engine.query(request.question)
+        # Convert ChatMessage list to primitive dict format for rag_engine
+        history_dicts = [{"role": msg.role, "content": msg.content} for msg in request.chat_history]
+        response = rag_engine.query(request.question, chat_history=history_dicts)
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

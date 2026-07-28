@@ -152,7 +152,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final number = match != null ? match.group(0) : '';
     
     final article = articles.firstWhere(
-      (element) => element['number'] == number,
+      (element) {
+        final elNum = element['number'] ?? '';
+        return elNum == citation || elNum == number || elNum.endsWith('Section $number');
+      },
       orElse: () => <String, String>{},
     );
     
@@ -165,6 +168,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
       return;
     }
+
+    final isSection = article['number']!.contains('Section');
+    final titlePrefix = isSection ? '' : 'Article ';
     
     showDialog(
       context: context,
@@ -179,7 +185,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Article ${article['number']}: ${article['title']}',
+                  '$titlePrefix${article['number']}: ${article['title']}',
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),

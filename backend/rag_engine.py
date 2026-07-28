@@ -1,13 +1,36 @@
 from ingester import get_vector_store
 from config import settings
 
-# Concise prompt that fits within flan-t5 token limits
+# Concise prompt that fits within flan-t5 token limits for single questions
 ANSWER_PROMPT = """Based on the following legal text, answer the question clearly and precisely. Cite the specific Article or Section numbers.
 
 Legal Text:
 {context}
 
 Question: {question}
+
+Answer:"""
+
+# Prompt to convert follow-up questions into standalone queries
+REFORMULATE_PROMPT = """Given the conversation history and a follow-up question, rewrite the follow-up question to be a standalone search query that contains all necessary context. Do not answer the question, just rewrite it.
+
+History:
+{history}
+
+Follow-up Question: {question}
+
+Standalone Query:"""
+
+# Prompt to answer follow-up questions using both history and retrieved context
+CHAT_ANSWER_PROMPT = """Based on the following legal text and conversation history, answer the follow-up question clearly and precisely. Cite the specific Article or Section numbers.
+
+Legal Text:
+{context}
+
+Conversation History:
+{history}
+
+Follow-up Question: {question}
 
 Answer:"""
 
@@ -174,10 +197,39 @@ class RAGEngine:
 
         return "\n".join(answer_parts)
 
-    def query(self, question: str) -> dict:
-        # Check if the query contains exact article or section references
+    def query(self, question: str, chat_history: list = None) -> dict:
+        # 1. Format chat history if present
+        history_str = ""
+        search_query = question
+
+        if chat_history:
+            # Take last 3 turns (6 messages) to avoid token limit overflow
+            turns = chat_history[-6:]
+            history_lines = []
+            for m in turns:
+                role = "User" if m['role'] == 'user' else "Assistant"
+                content = m['content'].strip()
+                if len(content) > 150:
+                    content = content[:147] + "..."
+                history_lines.append(f"{role}: {content}")
+            history_str = "\n".join(history_lines)
+
+            # 2. Contextualize / Reformulate query using the history
+            try:
+                reformulate_prompt = REFORMULATE_PROMPT.format(
+                    history=history_str,
+                    question=question
+                )
+                reformulated = self.llm.generate(reformulate_prompt).strip()
+                if len(reformulated) > 5 and not reformulated.startswith("Standalone Query:"):
+                    search_query = reformulated
+                    print(f"Reformulated query from '{question}' to '{search_query}'")
+            except Exception as e:
+                print(f"Error reformulating query: {e}")
+
+        # 3. Retrieve documents using exact match or similarity search on search_query
         from rag_pipeline.retriever import extract_article_numbers
-        article_numbers = extract_article_numbers(question)
+        article_numbers = extract_article_numbers(search_query)
         
         raw_docs = []
         if article_numbers:
@@ -201,10 +253,10 @@ class RAGEngine:
         # If no exact match is found, fallback to similarity search
         if not raw_docs:
             raw_docs = self.vector_store.similarity_search(
-                question, k=settings.RETRIEVAL_K
+                search_query, k=settings.RETRIEVAL_K
             )
 
-        # 2. Deduplicate by article/section identifier
+        # 4. Deduplicate by article/section identifier
         seen_keys = set()
         relevant_docs = []
         for doc in raw_docs:
@@ -216,23 +268,30 @@ class RAGEngine:
                 seen_keys.add(key)
                 relevant_docs.append(doc)
 
-        # 3. Build a concise context for the LLM (fits within token limit)
+        # 5. Build a concise context for the LLM (fits within token limit)
         context_str = self._build_context_for_llm(relevant_docs)
 
-        # 4. Generate a brief contextual summary using the LLM
+        # 6. Generate a brief contextual summary using the LLM
         if context_str:
-            prompt = ANSWER_PROMPT.format(
-                context=context_str,
-                question=question,
-            )
+            if history_str:
+                prompt = CHAT_ANSWER_PROMPT.format(
+                    context=context_str,
+                    history=history_str,
+                    question=question,
+                )
+            else:
+                prompt = ANSWER_PROMPT.format(
+                    context=context_str,
+                    question=question,
+                )
             llm_summary = self.llm.generate(prompt)
         else:
             llm_summary = ""
 
-        # 5. Build the full structured answer combining LLM summary + retrieved content
+        # 7. Build the full structured answer combining LLM summary + retrieved content
         answer = self._build_structured_answer(question, llm_summary, relevant_docs)
 
-        # 6. Build response metadata
+        # 8. Build response metadata
         retrieved_articles = []
         articles_cited = []
         for doc in relevant_docs:

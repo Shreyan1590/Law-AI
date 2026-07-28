@@ -25,6 +25,7 @@ class ApiService {
   /// Sends a question to the backend FastAPI server `/ask` endpoint.
   Future<Map<String, dynamic>> askQuestion(
     String question, {
+    List<Map<String, String>>? chatHistory,
     String? email,
   }) async {
     final url = Uri.parse('$baseUrl/ask');
@@ -39,6 +40,7 @@ class ApiService {
             },
             body: jsonEncode({
               'question': question,
+              'chat_history': chatHistory ?? [],
               if (email != null && email.isNotEmpty) 'email': email,
             }),
           )

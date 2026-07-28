@@ -78,8 +78,24 @@ class _ChatScreenState extends State<ChatScreen> {
       email = await authService.getUserEmail();
     }
 
-    // Call API service with optional email parameter
-    final response = await _apiService.askQuestion(text, email: email);
+    // Extract conversation history to pass context to the backend
+    final chatHistory = _messages
+        .sublist(1)
+        .where((msg) => !msg.text.startsWith('### Welcome to'))
+        .map((msg) => {
+              'role': msg.isUser ? 'user' : 'assistant',
+              'content': msg.text,
+            })
+        .toList()
+        .reversed
+        .toList();
+
+    // Call API service with optional email and chatHistory parameters
+    final response = await _apiService.askQuestion(
+      text,
+      chatHistory: chatHistory,
+      email: email,
+    );
 
     setState(() {
       _isLoading = false;
@@ -112,19 +128,22 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Displays the raw, original text of the retrieved constitutional provision in a modal dialog.
+  /// Displays the raw, original text of the retrieved constitutional provision or criminal code section in a modal dialog.
   void _showArticleDialog(
     BuildContext context,
     String citation,
     List<Map<String, String>> articles,
   ) {
-    // Extract digit number from citation string (e.g. "Article 14" -> "14")
+    // Extract digit number from citation string (e.g. "Article 14" -> "14", or "BNS Section 15" -> "15")
     final match = RegExp(r'\d+[A-Z]?').firstMatch(citation);
     final number = match != null ? match.group(0) : '';
 
-    // Find the matching cached article detail
+    // Find the matching cached article detail (either matching exact citation or number)
     final article = articles.firstWhere(
-      (element) => element['number'] == number,
+      (element) {
+        final elNum = element['number'] ?? '';
+        return elNum == citation || elNum == number || elNum.endsWith('Section $number');
+      },
       orElse: () => <String, String>{},
     );
 
@@ -140,6 +159,9 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    final isSection = article['number']!.contains('Section');
+    final titlePrefix = isSection ? '' : 'Article ';
+
     showDialog(
       context: context,
       builder: (context) {
@@ -153,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Article ${article['number']}: ${article['title']}',
+                  '$titlePrefix${article['number']}: ${article['title']}',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
