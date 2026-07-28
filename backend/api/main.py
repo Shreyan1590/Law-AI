@@ -296,7 +296,7 @@ async def generateAndSendOTP(phoneNumber: str) -> dict:
 
     # Professional OTP text formatting
     professional_message = (
-        f"Arasamaippu AI: Your verification code is {otp_code}. "
+        f"Samaneedhi AI: Your verification code is {otp_code}. "
         f"Valid for 5 minutes. Please do not share this code with anyone."
     )
 

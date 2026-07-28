@@ -271,11 +271,11 @@ def _fallback_general_answer(question: str) -> str:
     q = question.strip().lower()
     if GREETING_PATTERN.search(q):
         return (
-            "Hi! I'm **Arasamaippu AI** - your friendly assistant for the Constitution of India.\n\n"
+            "Hi! I'm **Samaneedhi AI** - your friendly assistant for the Constitution of India and Indian Laws (BNS, BNSS, BSA).\n\n"
             "You can ask me things like:\n\n"
             "- \"What is Article 21?\"\n"
-            "- \"Which Articles match right to equality?\"\n"
-            "- \"Explain my doubt about Article 19.\"\n\n"
+            "- \"What is BNS Section 15?\"\n"
+            "- \"What is BNSS Section 124?\"\n\n"
             "I'll keep it clear, simple, and grounded."
         )
 
@@ -304,7 +304,7 @@ def _fallback_general_answer(question: str) -> str:
         )
 
     return (
-        "Sure - I can help with general questions too. My strongest area is the **Constitution of India**, "
+        "Sure - I can help with general questions too. My strongest areas are the **Constitution of India** and the new **Criminal Laws (BNS, BNSS, BSA)**, "
         "but I can also explain ordinary concepts in a friendly, simple way.\n\n"
         "Ask the question directly, and I'll answer clearly. If it needs current/live facts, please remember I may not have real-time updates."
     )
@@ -312,7 +312,7 @@ def _fallback_general_answer(question: str) -> str:
 
 def _general_answer(question: str) -> dict:
     llm_answer = _call_gemini(
-        "You are Arasamaippu AI, a warm and friendly assistant. "
+        "You are Samaneedhi AI, a warm and friendly assistant. "
         "Answer the user's general question clearly and conversationally. "
         "If the user asks a legal question, explain it as general information and add a short not-legal-advice disclaimer. "
         "If the question needs live/current information, say that you may not have live updates. "
@@ -335,9 +335,9 @@ def _grounded_article_explanation(question: str, docs: list[dict], specific: boo
         for doc in docs
     )
     prompt = (
-        "You are Arasamaippu AI, a friendly assistant explaining the Constitution of India. "
-        "Use ONLY the article text below. Do not cite Articles that are not in the provided context. "
-        "If the user asks about a specific Article, explain only that Article. "
+        "You are Samaneedhi AI, a friendly assistant explaining the Constitution of India and Indian laws. "
+        "Use ONLY the article/section text below. Do not cite provisions that are not in the provided context. "
+        "If the user asks about a specific Article or Section, explain only that provision. "
         "Use simple language, answer the user's doubt directly, and include a short disclaimer that this is not legal advice.\n\n"
         f"User question: {question}\n\n"
         f"Article context:\n{context}"

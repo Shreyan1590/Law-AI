@@ -28,14 +28,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _messages.add(
       ChatMessage(
         text:
-            "### Welcome to Arasamaippu AI\n\n"
-            "Ask me about the **Constitution of India**, a specific Article, or even a general doubt. "
+            "### Welcome to Samaneedhi AI\n\n"
+            "Ask me about the **Constitution of India**, **Criminal Laws (BNS, BNSS, BSA)**, or any general doubt. "
             "I'll keep it friendly, clear, and useful.\n\n"
             "**Examples:**\n"
             "- \"What is Article 21?\"\n"
-            "- \"Which Articles match right to equality?\"\n"
-            "- \"Explain my doubt about Article 19.\"\n"
-            "- \"Give me a simple explanation of democracy.\"",
+            "- \"What is BNS Section 15?\"\n"
+            "- \"What is BNSS Section 124?\"\n"
+            "- \"Explain the solitary confinement limits in BNS.\"",
         isUser: false,
         timestamp: DateTime.now(),
       ),
@@ -240,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
             AppLogo(size: 28, showShadow: false),
             SizedBox(width: 10),
             Text(
-              'Arasamaippu AI',
+              'Samaneedhi AI',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ],

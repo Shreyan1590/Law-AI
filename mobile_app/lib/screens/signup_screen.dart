@@ -229,7 +229,7 @@ class _SignupScreenState extends State<SignupScreen>
       if (mounted) {
         await SuccessOverlay.show(
           context,
-          title: 'Welcome to Arasamaippu AI!',
+          title: 'Welcome to Samaneedhi AI!',
           description: 'Your account has been registered successfully.',
           actionLabel: 'Get Started',
           onAction: () {

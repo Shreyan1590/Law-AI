@@ -16,10 +16,10 @@ class _IntroScreenState extends State<IntroScreen> {
 
   final List<Map<String, dynamic>> _onboardingData = [
     {
-      'title': 'Arasamaippu AI',
-      'subtitle': 'A professional AI search tool for the Constitution of India.',
+      'title': 'Samaneedhi AI',
+      'subtitle': 'A professional AI search tool for the Constitution and Indian Laws.',
       'icon': Icons.gavel,
-      'description': 'Search constitutional laws in plain English and retrieve answers instantly.',
+      'description': 'Search constitutional and criminal laws in plain English and retrieve answers instantly.',
     },
     {
       'title': 'Grounded RAG Search',

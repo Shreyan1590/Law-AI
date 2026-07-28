@@ -218,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
               // Title Headers
               const Text(
-                'Arasamaippu AI',
+                'Samaneedhi AI',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -229,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
               const SizedBox(height: 6),
               const Text(
-                'Indian Constitution AI Query Portal',
+                'Indian Constitution & Laws Query Portal',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
