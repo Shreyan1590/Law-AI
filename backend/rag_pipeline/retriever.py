@@ -21,39 +21,49 @@ _vector_store = None
 _d1_client = None
 _article_index = None
 
+# Regex to match Articles and Sections (e.g. Article 21, BNS Section 15, Section 15 of BNSS)
 ARTICLE_REFERENCE_PATTERN = re.compile(
-    r'\b(?:article\s+number|article\s+no\.?|article|articles|art\.?|arts\.?)\s*(\d+[A-Z]?)\b',
+    r'\b(?:(?:(BNS|BNSS|BSA)\s+(?:section|sec\.?)\s*(\d+[A-Z]?))|(?:(?:section|sec\.?)\s*(\d+[A-Z]?)\s+of\s+(BNS|BNSS|BSA))|(?:(?:article|art\.?)\s*(\d+[A-Z]?)))\b',
     re.IGNORECASE,
 )
 
 def extract_article_numbers(query: str) -> list[str]:
     """
-    Returns explicitly mentioned Article numbers in user order.
-    Example: "Articles 14 and 21" -> ["14", "21"].
+    Returns explicitly mentioned Article or Section references in user order.
+    Example: "Article 21" -> ["21"]
+             "BNS Section 15" -> ["BNS Section 15"]
+             "Section 9 of BSA" -> ["BSA Section 9"]
     """
     seen = set()
     article_numbers = []
 
     def add_number(raw_number: str) -> None:
-        number = raw_number.upper()
-        if number not in seen:
-            seen.add(number)
-            article_numbers.append(number)
+        normalized = raw_number
+        match = re.match(r'^(BNS|BNSS|BSA)\s+SECTION\s+(\d+[A-Z]?)$', raw_number.upper())
+        if match:
+            normalized = f"{match.group(1)} Section {match.group(2)}"
+        else:
+            normalized = raw_number.upper()
+            
+        if normalized not in seen:
+            seen.add(normalized)
+            article_numbers.append(normalized)
 
     standalone_number = re.fullmatch(r'\s*(\d{1,3}[A-Z]?)\s*', query)
     if standalone_number:
         return [standalone_number.group(1).upper()]
-    for match in ARTICLE_REFERENCE_PATTERN.finditer(query):
-        add_number(match.group(1))
 
-        tail = query[match.end():]
-        offset = 0
-        while True:
-            extra = re.match(r'\s*(?:,|and|&)\s*(\d{1,3}[A-Z]?)\b', tail[offset:], re.IGNORECASE)
-            if not extra:
-                break
-            add_number(extra.group(1))
-            offset += extra.end()
+    for match in ARTICLE_REFERENCE_PATTERN.finditer(query):
+        g1, g2, g3, g4, g5 = match.groups()
+        if g1 and g2:
+            val = f"{g1.upper()} Section {g2.upper()}"
+        elif g3 and g4:
+            val = f"{g4.upper()} Section {g3.upper()}"
+        elif g5:
+            val = g5.upper()
+        else:
+            continue
+        add_number(val)
 
     return article_numbers
 

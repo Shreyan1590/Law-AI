@@ -17,7 +17,12 @@ import pypdf
 
 # Define path for Chroma persistent storage
 CHROMA_DB_DIR = str(Path(__file__).resolve().parents[1] / "chroma_db")
-PDF_PATH = str(Path(__file__).resolve().parents[1].parent / "constitution_of_india.pdf")
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+
+CONSTITUTION_PDF_PATH = str(DATA_DIR / "constitution_of_india.pdf")
+BNS_PDF_PATH = str(DATA_DIR / "BNS.pdf")
+BNSS_PDF_PATH = str(DATA_DIR / "BNSS.pdf")
+BSA_PDF_PATH = str(DATA_DIR / "BSA.pdf")
 
 def clean_extracted_text(text):
     """
@@ -44,25 +49,17 @@ def clean_extracted_text(text):
         
     return '\n'.join(cleaned_lines)
 
-def run_pdf_ingestion():
-    if not os.path.exists(PDF_PATH):
-        print(f"Error: PDF file not found at {PDF_PATH}")
-        sys.exit(1)
-        
-    print(f"Opening PDF file: {PDF_PATH}")
-    reader = pypdf.PdfReader(PDF_PATH)
+def parse_constitution(pdf_path) -> list[Document]:
+    print(f"Opening Constitution PDF: {pdf_path}")
+    reader = pypdf.PdfReader(pdf_path)
     total_pages = len(reader.pages)
-    print(f"Total PDF pages: {total_pages}")
     
     # 1. Load Preamble (Page 31)
     preamble_text = ""
     try:
-        # Page 31 in 0-based index is page index 31
         p31_text = reader.pages[31].extract_text() or ""
         if "PREAMBLE" in p31_text:
-            # Clean and extract text from PREAMBLE onwards
             preamble_text = p31_text.split("PREAMBLE")[-1].strip()
-            # Remove footnotes from the bottom of the preamble page
             preamble_text = re.split(r'\n\s*1\.\s+Subs\b', preamble_text)[0].strip()
     except Exception as e:
         print(f"Warning: Failed to extract Preamble from page 31: {e}")
@@ -78,36 +75,22 @@ def run_pdf_ingestion():
                 "part": "Preamble"
             }
         ))
-        print("Preamble loaded from PDF.")
         
     # 2. Extract and concatenate Articles text (Pages 32 to 282 inclusive)
-    print("Extracting text from Article pages (32 to 282)...")
     articles_full_text = ""
-    
     for page_idx in range(32, 283):
         if page_idx >= total_pages:
             break
         page_text = reader.pages[page_idx].extract_text() or ""
-        # Clean page-level headers/footers
         cleaned_page = clean_extracted_text(page_text)
         articles_full_text += "\n" + cleaned_page
         
     # 3. Parse Articles and Parts
-    # We will look for:
-    # A) Part headers: "PART I", "PART II", etc. followed by the part title
-    # B) Articles: e.g. "1. Name and territory of the Union.—"
-    
-    # Regex to find starting positions of articles
-    # Pattern: \n followed by number (with optional letter like 21A), period, title, and em-dash/en-dash punctuation
     article_pattern = re.compile(
         r'\n\s*(\d+[A-Z]?)\.\s+([A-Za-z0-9\s,⎯—–\-\(\)/\"”’‘\'“”]+)(?:\.—|\.\s*—|\.\s*–|\.\s*⎯)'
     )
     
-    # Find all article matches and their spans
     matches = list(article_pattern.finditer(articles_full_text))
-    print(f"Found {len(matches)} articles in the PDF text.")
-    
-    # We will scan the text to identify Part divisions and attach the part name to metadata
     part_pattern = re.compile(r'\bPART\s+([IVXLCDM]+)\s*\n\s*([^\n]+)', re.IGNORECASE)
     parts_list = list(part_pattern.finditer(articles_full_text))
     
@@ -120,44 +103,152 @@ def run_pdf_ingestion():
                 break
         return current_part
         
-    # Slice the concatenated text by matches to extract the full body of each article
     for i, match in enumerate(matches):
         art_num = match.group(1)
         art_title = match.group(2).strip()
-        
-        # Start of this article body is right after the heading match ends
         start_pos = match.end()
-        
-        # End of this article body is the start of the next article match (or end of document)
         if i + 1 < len(matches):
             end_pos = matches[i + 1].start()
         else:
             end_pos = len(articles_full_text)
             
         art_content = articles_full_text[start_pos:end_pos].strip()
-        
-        # Clean any trailing Part headers or numbers at the end of the text slice
         art_content = re.split(r'\bPART\s+[IVXLCDM]+\b', art_content)[0].strip()
-        
-        # Determine which Part this article belongs to based on its position in the text
         art_part = get_part_for_position(match.start())
         
         metadata = {
             "type": "article",
             "number": str(art_num),
             "title": str(art_title),
-            "part": str(art_part)
+            "part": str(art_part),
+            "article": f"Article {art_num}",
+            "source": "Constitution of India"
         }
         
         content_text = f"Article {art_num}: {art_title}\n{art_part}\n\n{art_content}"
         documents.append(Document(page_content=content_text, metadata=metadata))
         
-    print(f"Total documents prepared for database: {len(documents)}")
+    print(f"Constitution parsed: {len(documents)} segments.")
+    return documents
+
+def get_section_title(sec_text, sec_num, source_name):
+    # Clean first line
+    lines = [l.strip() for l in sec_text.split('\n') if l.strip()]
+    if not lines:
+        return f"Section {sec_num}"
     
-    if len(documents) <= 1:
-        print("Error: Parsing failed to yield articles! Database will not be updated.")
+    # Remove the section number prefix (e.g., "15.")
+    first_line = lines[0]
+    first_line_clean = re.sub(r'^\d+\.[\s\xa0]*', '', first_line).strip()
+    
+    # Take the first sentence or first 80 characters
+    first_sentence = first_line_clean.split('.')[0].strip()
+    # Remove sub-section markers like (1) from start
+    first_sentence = re.sub(r'^\(\d+\)\s*', '', first_sentence).strip()
+    if len(first_sentence) > 80:
+        first_sentence = first_sentence[:77] + "..."
+    if not first_sentence:
+        first_sentence = f"Section {sec_num} of {source_name}"
+    return first_sentence
+
+def parse_criminal_code(pdf_path: str, prefix: str, source_name: str) -> list[Document]:
+    print(f"Opening Criminal Code PDF: {pdf_path}")
+    reader = pypdf.PdfReader(pdf_path)
+    full_text = "\n".join([page.extract_text() or "" for page in reader.pages])
+    
+    section_pattern = r'\n(?=\s*\d+\.(?:\s*|\([^\)]+\)\s*)[A-Z\(\"“\'])'
+    raw_chunks = re.split(section_pattern, full_text)
+    
+    # Parse Chapters to associate sections with their respective Chapters
+    chapter_pattern = re.compile(r'\bCHAPTER\s+([IVXLCDM]+)\s*\n\s*([^\n]+)', re.IGNORECASE)
+    chapters_list = list(chapter_pattern.finditer(full_text))
+    
+    def get_chapter_for_position(pos):
+        current_chapter = "General"
+        for chap_match in chapters_list:
+            if chap_match.start() < pos:
+                current_chapter = f"Chapter {chap_match.group(1)}: {chap_match.group(2).strip()}"
+            else:
+                break
+        return current_chapter
+
+    # Find the positions of the chunks in the full text to assign correct chapters
+    documents = []
+    current_pos = 0
+    
+    for idx, chunk in enumerate(raw_chunks):
+        text = chunk.strip()
+        if not text:
+            continue
+        
+        # Locate chunk position in full text
+        pos = full_text.find(chunk, current_pos)
+        if pos != -1:
+            current_pos = pos + len(chunk)
+        else:
+            pos = current_pos
+            
+        # Extract section number (e.g. "98.Whoever" or "105. Whoever")
+        first_line = text.split('\n')[0].strip()
+        match = re.match(r'^\s*(\d+)\.', first_line)
+        if not match:
+            match = re.search(r'\b(\d+)\.', first_line)
+            
+        if match:
+            sec_num = match.group(1)
+            # Create a unique number like "BNS Section 15"
+            number_val = f"{prefix} Section {sec_num}"
+            title_val = get_section_title(text, sec_num, source_name)
+            part_val = get_chapter_for_position(pos)
+            
+            metadata = {
+                "type": "article",  # type is "article" so export script picks it up
+                "number": number_val,
+                "title": title_val,
+                "part": part_val,
+                "article": number_val,
+                "source": source_name
+            }
+            
+            content_text = f"{number_val}: {title_val}\n{part_val}\n\n{text}"
+            documents.append(Document(page_content=content_text, metadata=metadata))
+            
+    print(f"Parsed {source_name}: {len(documents)} segments.")
+    return documents
+
+def run_pdf_ingestion():
+    documents = []
+    
+    # 1. Parse Constitution
+    if os.path.exists(CONSTITUTION_PDF_PATH):
+        documents.extend(parse_constitution(CONSTITUTION_PDF_PATH))
+    else:
+        print(f"Warning: Constitution PDF not found at {CONSTITUTION_PDF_PATH}")
+
+    # 2. Parse BNS
+    if os.path.exists(BNS_PDF_PATH):
+        documents.extend(parse_criminal_code(BNS_PDF_PATH, "BNS", "Bharatiya Nyaya Sanhita (BNS)"))
+    else:
+        print(f"Warning: BNS PDF not found at {BNS_PDF_PATH}")
+        
+    # 3. Parse BNSS
+    if os.path.exists(BNSS_PDF_PATH):
+        documents.extend(parse_criminal_code(BNSS_PDF_PATH, "BNSS", "Bharatiya Nagarik Suraksha Sanhita (BNSS)"))
+    else:
+        print(f"Warning: BNSS PDF not found at {BNSS_PDF_PATH}")
+        
+    # 4. Parse BSA
+    if os.path.exists(BSA_PDF_PATH):
+        documents.extend(parse_criminal_code(BSA_PDF_PATH, "BSA", "Bharatiya Sakshya Adhiniyam (BSA)"))
+    else:
+        print(f"Warning: BSA PDF not found at {BSA_PDF_PATH}")
+
+    if not documents:
+        print("Error: No documents were parsed! Please check PDF paths.")
         sys.exit(1)
         
+    print(f"Total documents prepared for database: {len(documents)}")
+    
     # Delete the existing Chroma database directory to clear any duplicates
     if os.path.exists(CHROMA_DB_DIR):
         print(f"Clearing existing database directory at {CHROMA_DB_DIR} to avoid duplicates...")
@@ -168,13 +259,16 @@ def run_pdf_ingestion():
             print(f"Warning: Could not clear database directory: {e}. Trying to overwrite.")
             
     # 4. Generate Embeddings & Save to Chroma DB (Overwriting previous database)
-    print("Generating embeddings from PDF and updating Chroma DB... (This will take a moment)")
+    print("Generating embeddings from PDFs and updating Chroma DB... (This will take a moment)")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
+    from config import settings
     db = Chroma.from_documents(
         documents=documents,
         embedding=embeddings,
-        persist_directory=CHROMA_DB_DIR
+        collection_name=settings.COLLECTION_NAME,
+        persist_directory=CHROMA_DB_DIR,
+        collection_metadata={"hnsw:space": "cosine"}
     )
     
     # 5. Save to Cloudflare D1 SQL Database
@@ -227,10 +321,14 @@ def run_pdf_ingestion():
             d1_success = True
         except Exception as e:
             print(f"Error ingesting into Cloudflare D1: {e}")
+        finally:
+            # Sleep brief moment to allow D1 to finalize writes
+            import time
+            time.sleep(1)
     else:
         print("Cloudflare D1 is not configured. Skipping D1 database initialization.")
         
-    print("\n--- PDF Ingestion Summary ---")
+    print("\n--- Ingestion Summary ---")
     print(f"Total chunks created: {len(documents)}")
     print(f"Chroma DB saved successfully at: {CHROMA_DB_DIR}")
     if d1.is_configured():

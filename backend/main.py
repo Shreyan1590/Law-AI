@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import shutil
 from pathlib import Path
@@ -8,6 +9,15 @@ from ingester import ingest_documents
 from rag_engine import RAGEngine
 
 app = FastAPI(title="RAG AI Assistant API", version="1.0.0")
+
+# Enable CORS so the test UI (served from a different port) can reach the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Lazy initialization of RAG engine
 rag_engine = None

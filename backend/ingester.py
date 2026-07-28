@@ -208,7 +208,7 @@ def ingest_documents(docs_dir: str = settings.DOCUMENTS_DIR) -> int:
         print("No valid documents extracted.")
         return 0
 
-    print(f"Generating embeddings using {settings.EMBEDDING_MODEL} model and saving {len(all_docs)} segments into ChromaDB...")
+    print(f"Generating embeddings using local HuggingFace model and saving {len(all_docs)} segments into ChromaDB...")
     embeddings = get_embedding_function()
     Chroma.from_documents(
         documents=all_docs,
