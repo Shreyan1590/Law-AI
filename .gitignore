@@ -66,3 +66,4 @@ yarn-error.log*
 *.swo
 .DS_Store
 Thumbs.db
+backend/test_ui.html

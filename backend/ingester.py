@@ -161,12 +161,8 @@ def parse_criminal_code(pdf_path: Path) -> list[Document]:
     return documents
 
 def get_embedding_function():
-    if settings.EMBEDDING_MODEL == "openai":
-        from langchain_openai import OpenAIEmbeddings
-        return OpenAIEmbeddings(openai_api_key=settings.OPENAI_API_KEY)
-    else:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-        return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 def get_vector_store():
     from langchain_community.vectorstores import Chroma
