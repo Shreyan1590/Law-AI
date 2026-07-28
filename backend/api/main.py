@@ -18,6 +18,14 @@ from rag_pipeline.retriever import retrieve
 from rag_pipeline.generator import generate_answer, should_answer_without_retrieval
 from rag_pipeline.d1_client import D1Client
 
+# Try to import OpenAI RAG pipeline
+try:
+    from rag_pipeline.openai_rag import run_rag_pipeline as run_openai_rag
+    HAS_OPENAI_RAG = True
+except Exception:
+    HAS_OPENAI_RAG = False
+
+
 # Initialize D1 Client
 d1_client = D1Client()
 
@@ -573,24 +581,35 @@ async def ask_question(request: AskRequest, raw_request: Request, background_tas
     env = raw_request.scope.get("env")
     d1_binding = getattr(env, "DB", None) if env else None
     
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    use_openai = HAS_OPENAI_RAG and bool(openai_key)
+
     try:
-        # 1. Retrieve context documents unless this is clearly friendly/general chat.
-        # Exact Article requests are handled inside retrieve() and return only the requested Article(s).
-        if should_answer_without_retrieval(question):
-            retrieved_docs = []
+        if use_openai:
+            # Execute OpenAI RAG pipeline
+            response = run_openai_rag(question)
+            cited_articles_metadata = [
+                f"{art.get('title', 'Page')} {art.get('number', '')}"
+                for art in response.get("retrieved_articles", [])
+            ]
         else:
-            retrieved_docs = await retrieve(question, k=8, d1_binding=d1_binding)
-        
-        # 2. Extract article numbers for logging
-        cited_articles_metadata = []
-        for doc in retrieved_docs:
-            meta = doc.get("metadata", {})
-            doc_type = meta.get("type", "article")
-            doc_num = meta.get("number", "")
-            cited_articles_metadata.append(f"{doc_type} {doc_num}")
+            # 1. Retrieve context documents unless this is clearly friendly/general chat.
+            # Exact Article requests are handled inside retrieve() and return only the requested Article(s).
+            if should_answer_without_retrieval(question):
+                retrieved_docs = []
+            else:
+                retrieved_docs = await retrieve(question, k=8, d1_binding=d1_binding)
             
-        # 3. Generate answer using LLM
-        response = generate_answer(question, retrieved_docs)
+            # 2. Extract article numbers for logging
+            cited_articles_metadata = []
+            for doc in retrieved_docs:
+                meta = doc.get("metadata", {})
+                doc_type = meta.get("type", "article")
+                doc_num = meta.get("number", "")
+                cited_articles_metadata.append(f"{doc_type} {doc_num}")
+                
+            # 3. Generate answer using LLM
+            response = generate_answer(question, retrieved_docs)
         
         # 4. Log the transaction (Step 7: Privacy-safe, no personal info)
         logger.info(
