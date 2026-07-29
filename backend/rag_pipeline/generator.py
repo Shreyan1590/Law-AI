@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 ARTICLE_REFERENCE_PATTERN = re.compile(
-    r"\b(?:article\s+number|article\s+no\.?|article|articles|art\.?|arts\.?)\s*(\d+[A-Z]?)\b",
+    r'\b(?:(?:(BNS|BNSS|BSA)\s+(?:section|sec\.?)\s*(\d+[A-Z]?))|(?:(?:section|sec\.?)\s*(\d+[A-Z]?)\s+of\s+(BNS|BNSS|BSA))|(?:(?:article|art\.?)\s*(\d+[A-Z]?)))\b',
     re.IGNORECASE,
 )
 
@@ -60,53 +60,149 @@ QUESTION_WORD_PATTERN = re.compile(
 
 def extract_article_numbers(question: str) -> list[str]:
     seen = set()
-    numbers: list[str] = []
+    article_numbers = []
 
     def add_number(raw_number: str) -> None:
-        number = raw_number.upper()
-        if number not in seen:
-            seen.add(number)
-            numbers.append(number)
+        normalized = raw_number
+        match = re.match(r'^(BNS|BNSS|BSA)\s+SECTION\s+(\d+[A-Z]?)$', raw_number.upper())
+        if match:
+            normalized = f"{match.group(1)} Section {match.group(2)}"
+        else:
+            normalized = raw_number.upper()
+            
+        if normalized not in seen:
+            seen.add(normalized)
+            article_numbers.append(normalized)
 
-    standalone_number = re.fullmatch(r"\s*(\d{1,3}[A-Z]?)\s*", question)
+    standalone_number = re.fullmatch(r'\s*(\d{1,3}[A-Z]?)\s*', question)
     if standalone_number:
         return [standalone_number.group(1).upper()]
+
     for match in ARTICLE_REFERENCE_PATTERN.finditer(question):
-        add_number(match.group(1))
+        g1, g2, g3, g4, g5 = match.groups()
+        if g1 and g2:
+            val = f"{g1.upper()} Section {g2.upper()}"
+        elif g3 and g4:
+            val = f"{g4.upper()} Section {g3.upper()}"
+        elif g5:
+            val = g5.upper()
+        else:
+            continue
+        add_number(val)
 
-        tail = question[match.end() :]
-        offset = 0
-        while True:
-            extra = re.match(r"\s*(?:,|and|&)\s*(\d{1,3}[A-Z]?)\b", tail[offset:], re.IGNORECASE)
-            if not extra:
-                break
-            add_number(extra.group(1))
-            offset += extra.end()
+    return article_numbers
 
-    return numbers
+
+def _is_legal_query(question: str) -> bool:
+    """
+    Checks if a query has legal or constitutional intent.
+    If it's about weather, code, recipes, or other general topics, it's NOT a legal query.
+    """
+    q_lower = question.strip().lower()
+    
+    # Common legal terms
+    legal_keywords = [
+        "article", "section", "sec", "bns", "bnss", "bsa", "law", "court", "judge", 
+        "offence", "evidence", "constitution", "rights", "duty", "duties", "punishment", 
+        "confinement", "theft", "murder", "ipc", "crpc", "arrest", "warrant", "police",
+        "magistrate", "accused", "appeal", "judicial", "offense"
+    ]
+    
+    return any(k in q_lower for k in legal_keywords)
 
 
 def should_answer_without_retrieval(question: str) -> bool:
     """
-    Skips expensive / irrelevant retrieval for friendly/general questions.
-    Constitutional or legal-looking questions still go through retrieval.
+    Skips retrieval for queries that do not have legal/constitutional intent,
+    or for simple app greetings/chat.
     """
     q = question.strip()
     if not q:
         return True
-    if ARTICLE_REFERENCE_PATTERN.search(q) or CONSTITUTIONAL_INTENT_PATTERN.search(q):
+        
+    # Check if it has legal intent
+    if _is_legal_query(q):
         return False
-    if LEGAL_BUT_NON_CONSTITUTION_PATTERN.search(q):
-        return True
-    # Anything that is not Constitution/legal intent is a general assistant question.
-    # This prevents unrelated Constitution Articles from appearing for ordinary chat.
-    if len(q.split()) >= 2:
-        return True
-    return bool(
-        GREETING_PATTERN.search(q)
-        or THANKS_OR_COMPLIMENT_PATTERN.search(q)
-        or GENERAL_CHAT_PATTERN.search(q)
-    )
+        
+    # If it's a general/greeting query, answer without retrieval
+    return True
+
+
+STATE_MESSAGES = {
+    "empty": "Nothing here yet. Start exploring!",
+    "loading": "Loading your content… please wait.",
+    "error": "Something went wrong.",
+    "offline": "You’re offline. Check your connection.",
+    "slow": "Network is slow, hang tight.",
+    "no_results": "No results found. Try different keywords.",
+    "denied": "Permission denied. Please allow access.",
+    "expired": "Your session has expired. Log in again.",
+    "invalid": "Please correct the errors before submitting.",
+    "success": "Action completed successfully!"
+}
+
+
+def classify_overlay_state(question: str) -> dict | None:
+    """
+    Parses user input for keywords, intent, and context.
+    Matches against predefined states and returns state and message if confidence >= 0.8.
+    """
+    q = question.strip().lower()
+    if not q:
+        return None
+
+    # Predefined state keywords matching JS/Flutter definitions
+    states = {
+        "empty": ["empty", "no data", "nothing here", "blank", "empty state", "/empty"],
+        "loading": ["loading", "fetching", "please wait", "spinner", "loader", "/loading"],
+        "error": ["error", "failed", "crash", "wrong", "failure", "/error"],
+        "offline": ["offline", "no internet", "disconnected", "no wifi", "/offline"],
+        "slow": ["slow", "lag", "latency", "hang", "slow network", "/slow"],
+        "no_results": ["no results", "search empty", "empty search", "zero matches", "/no_results"],
+        "denied": ["denied", "blocked", "permission", "allow access", "forbidden", "/denied"],
+        "expired": ["expired", "timeout", "session timeout", "session expired", "/expired"],
+        "invalid": ["invalid", "form error", "correct errors", "validation error", "/invalid"],
+        "success": ["success", "done", "completed", "succeeded", "ok", "/success"]
+    }
+
+    # Normalize: strip leading slash if present
+    clean_q = q[1:] if q.startswith('/') else q
+
+    best_match = None
+    max_score = 0.0
+
+    for state_name, keywords in states.items():
+        for kw in keywords:
+            if clean_q == kw or clean_q in kw or kw in clean_q:
+                # Calculate relative length score for confidence
+                if clean_q == kw:
+                    score = 1.0
+                else:
+                    score = len(kw) / len(clean_q)
+                if score > max_score:
+                    max_score = score
+                    best_match = state_name
+
+    # Fuzzy matching for spelling/synonyms
+    if not best_match:
+        # Check if they are requesting a state specifically
+        for prefix in ["test state", "state", "test"]:
+            if clean_q.startswith(prefix):
+                target = clean_q.replace(prefix, "").strip()
+                for state_name in states.keys():
+                    if target in state_name or state_name in target:
+                        max_score = 0.9
+                        best_match = state_name
+                        break
+
+    if max_score >= 0.8:
+        return {"state": best_match, "message": STATE_MESSAGES[best_match]}
+        
+    # If the user input starts with a special testing command prefix (like '/' or 'state ' or 'test ') but fails confidence, fallback to error state
+    if q.startswith('/') or q.startswith('state ') or q.startswith('test '):
+        return {"state": "error", "message": STATE_MESSAGES["error"]}
+
+    return None
 
 
 def _has_constitutional_intent(question: str) -> bool:
@@ -217,7 +313,8 @@ def _retrieved_articles(docs: list[dict]) -> list[dict[str, str]]:
 
 
 def _safe_google_api_key() -> str:
-    api_key = (os.getenv("GOOGLE_API_KEY") or "").strip()
+    # Check GEMINI_API_KEY first, fallback to GOOGLE_API_KEY
+    api_key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
     if not api_key or api_key.lower().startswith("your_"):
         return ""
     return api_key
@@ -272,6 +369,7 @@ def _fallback_general_answer(question: str) -> str:
     if GREETING_PATTERN.search(q):
         return (
             "Hi! I'm **Samaneedhi AI** - your friendly assistant for the Constitution of India and Indian Laws (BNS, BNSS, BSA).\n\n"
+            "*A Product by ProVeloce*\n\n"
             "You can ask me things like:\n\n"
             "- \"What is Article 21?\"\n"
             "- \"What is BNS Section 15?\"\n"
@@ -291,32 +389,16 @@ def _fallback_general_answer(question: str) -> str:
             "Tell me what you want to understand, and I'll make it clear."
         )
 
-    what_is_match = re.match(r"^\s*(what\s+is|what\s+are|explain|meaning\s+of)\s+(.+?)\??\s*$", question, re.IGNORECASE)
-    if what_is_match:
-        topic = what_is_match.group(2).strip()
-        return (
-            f"### {topic.capitalize()}\n\n"
-            f"{topic.capitalize()} is a concept that can be understood by looking at its main idea, purpose, and real-life use.\n\n"
-            "- **Main idea:** It refers to the basic meaning or principle behind the term.\n"
-            "- **Why it matters:** It helps people understand how something works in society, law, technology, or daily life.\n"
-            "- **Simple way to think about it:** Break it into smaller parts and ask: what does it do, who does it affect, and why is it important?\n\n"
-            "If you want, ask me the same question with a little more context, and I'll explain it more precisely."
-        )
-
-    return (
-        "Sure - I can help with general questions too. My strongest areas are the **Constitution of India** and the new **Criminal Laws (BNS, BNSS, BSA)**, "
-        "but I can also explain ordinary concepts in a friendly, simple way.\n\n"
-        "Ask the question directly, and I'll answer clearly. If it needs current/live facts, please remember I may not have real-time updates."
-    )
+    # Reject other general questions locally
+    return "I can only answer questions related to Samaneedhi AI or the indexed Indian Laws (Constitution, BNS, BNSS, BSA)."
 
 
 def _general_answer(question: str) -> dict:
     llm_answer = _call_gemini(
-        "You are Samaneedhi AI, a warm and friendly assistant. "
-        "Answer the user's general question clearly and conversationally. "
-        "If the user asks a legal question, explain it as general information and add a short not-legal-advice disclaimer. "
-        "If the question needs live/current information, say that you may not have live updates. "
-        "Do not invent citations.\n\n"
+        "You are Samaneedhi AI, a warm and friendly assistant (A Product by ProVeloce). "
+        "You can ONLY answer general questions that are about yourself (Samaneedhi AI) or the app's capabilities (e.g., greetings, how you work, what laws you know). "
+        "If the user asks any other general query (e.g., programming, math, recipes, weather, general history, general knowledge, or other non-app-related topics), "
+        "you MUST respond with exactly this message: 'I can only answer questions related to Samaneedhi AI or the indexed Indian Laws (Constitution, BNS, BNSS, BSA).'\n\n"
         f"User question: {question}"
     )
 
@@ -331,22 +413,26 @@ def _grounded_article_explanation(question: str, docs: list[dict], specific: boo
     if not docs:
         return None
     context = "\n\n".join(
-        f"Article {doc['number']}: {doc['title']}\nPart: {doc['part']}\nText:\n{doc['content']}"
+        f"Article/Section {doc['number']}: {doc['title']}\nPart: {doc['part']}\nText:\n{doc['content']}"
         for doc in docs
     )
     prompt = (
-        "You are Samaneedhi AI, a friendly assistant explaining the Constitution of India and Indian laws. "
-        "Use ONLY the article/section text below. Do not cite provisions that are not in the provided context. "
-        "If the user asks about a specific Article or Section, explain only that provision. "
-        "Use simple language, answer the user's doubt directly, and include a short disclaimer that this is not legal advice.\n\n"
+        "You are Samaneedhi AI, a friendly legal assistant explaining the Constitution of India and Indian laws (A Product by ProVeloce). "
+        "Answer the user's question with high accuracy based ONLY on the provided context. "
+        "Rules:\n"
+        "1. Do not use any external knowledge to answer. Rely strictly on the provided context.\n"
+        "2. If the answer cannot be found in the provided context, you MUST respond exactly: 'I could not find the answer to this question in the indexed legal files.'\n"
+        "3. Do not invent any citations or section/article numbers.\n"
+        "4. Output a clear, user-friendly, and precise answer. Do not ask any questions back to the user.\n"
+        "5. Include a short disclaimer at the end that this is general information, not legal advice.\n\n"
         f"User question: {question}\n\n"
-        f"Article context:\n{context}"
+        f"Context:\n{context}"
     )
     answer = _call_gemini(prompt)
     if not answer:
         return None
-    if specific and len(docs) == 1 and f"Article {docs[0]['number']}" not in answer:
-        answer = f"### Article {docs[0]['number']}: {docs[0]['title']}\n\n{answer}"
+    if specific and len(docs) == 1 and f"Article/Section {docs[0]['number']}" not in answer and f"Section {docs[0]['number']}" not in answer:
+        answer = f"### Section {docs[0]['number']}: {docs[0]['title']}\n\n{answer}"
     return answer
 
 

@@ -127,12 +127,11 @@ def _exact_article_docs_from_index(article_numbers: list[str]) -> list[dict]:
     indexed_articles = {
         str(row["number"]).upper(): row
         for row in _load_article_index()
-        if str(row.get("type", "article")).lower() == "article"
     }
     return [
-        _format_index_row(indexed_articles[number], score=1.0)
+        _format_index_row(indexed_articles[number.upper()], score=1.0)
         for number in article_numbers
-        if number in indexed_articles
+        if number.upper() in indexed_articles
     ]
 
 def _keyword_list(query: str) -> list[str]:
@@ -181,7 +180,7 @@ def _keyword_search_d1(d1: D1Client, query: str, k: int) -> list[dict]:
         "SELECT number, title, part, content, type, "
         f"({' + '.join(score_parts)}) AS match_score "
         "FROM articles "
-        "WHERE type = 'article' AND "
+        "WHERE "
         f"({' OR '.join(where_parts)}) "
         "ORDER BY match_score DESC, CAST(number AS INTEGER) ASC "
         "LIMIT ?"
@@ -203,8 +202,6 @@ def _keyword_search_index(query: str, k: int) -> list[dict]:
     scored_rows = []
     max_score = max(len(keywords) * 6, 1)
     for row in _load_article_index():
-        if str(row.get("type", "article")).lower() != "article":
-            continue
         title = row.get("title", "").lower()
         part = row.get("part", "").lower()
         content = row.get("content", "").lower()
@@ -296,7 +293,7 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
                     conditions.append("(content LIKE ? OR title LIKE ?)")
                     sql_params.extend([f"%{kw}%", f"%{kw}%"])
                 
-                sql = f"SELECT number, title, part, content, type FROM articles WHERE type = 'article' AND ({' OR '.join(conditions)}) LIMIT ?"
+                sql = f"SELECT number, title, part, content, type FROM articles WHERE ({' OR '.join(conditions)}) LIMIT ?"
                 sql_params.append(k)
 
                 resp = await d1_binding.prepare(sql).bind(*sql_params).all()
@@ -355,12 +352,7 @@ async def retrieve(query: str, k: int = 4, d1_binding=None):
                 db = get_vector_store()
                 for target_number in missing_numbers:
                     exact_docs = db.get(
-                        where={
-                            "$and": [
-                                {"number": {"$eq": str(target_number)}},
-                                {"type": {"$eq": "article"}}
-                            ]
-                        }
+                        where={"number": {"$eq": str(target_number)}}
                     )
                     if exact_docs and exact_docs.get("documents"):
                         doc_content = exact_docs["documents"][0]

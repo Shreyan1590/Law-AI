@@ -239,9 +239,26 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             AppLogo(size: 28, showShadow: false),
             SizedBox(width: 10),
-            Text(
-              'Samaneedhi AI',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Samaneedhi AI',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'A Product by ProVeloce',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.normal,
+                    color: Colors.white70, // Since AppBar has dark context/accent color
+                  ),
+                ),
+              ],
             ),
           ],
         ),

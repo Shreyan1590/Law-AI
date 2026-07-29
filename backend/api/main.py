@@ -147,6 +147,7 @@ class AskResponse(BaseModel):
     answer: str
     articles_cited: list[str]
     retrieved_articles: list[ArticleDetail] = []
+    overlay_state: str | None = None
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def root():
@@ -576,6 +577,18 @@ async def ask_question(request: AskRequest, raw_request: Request, background_tas
     generates a plain-language answer, and logs the query.
     """
     question = request.question.strip()
+
+    # Check for overlay state command matching (System Prompt)
+    from rag_pipeline.generator import classify_overlay_state
+    state_match = classify_overlay_state(question)
+    if state_match:
+        logger.info(f"Matched overlay state: {state_match['state']} for query: '{question}'")
+        return AskResponse(
+            answer=state_match["message"],
+            articles_cited=[],
+            retrieved_articles=[],
+            overlay_state=state_match["state"]
+        )
     
     # Extract native D1 binding if available from the Worker environment
     env = raw_request.scope.get("env")

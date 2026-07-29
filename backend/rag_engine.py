@@ -198,6 +198,30 @@ class RAGEngine:
         return "\n".join(answer_parts)
 
     def query(self, question: str, chat_history: list = None) -> dict:
+        # 0. Check for overlay state command matching
+        from rag_pipeline.generator import should_answer_without_retrieval, _general_answer, classify_overlay_state
+        state_match = classify_overlay_state(question)
+        if state_match:
+            print(f"Matched overlay state: {state_match['state']} for query: '{question}'")
+            return {
+                "answer": state_match["message"],
+                "articles_cited": [],
+                "retrieved_articles": [],
+                "overlay_state": state_match["state"]
+            }
+
+        # 0b. Bypass retrieval for friendly/general greeting questions
+        if should_answer_without_retrieval(question):
+            print(f"Bypassing retrieval for general query: '{question}'")
+            # General answers don't trigger overlays
+            general_res = _general_answer(question)
+            return {
+                "answer": general_res["answer"],
+                "articles_cited": [],
+                "retrieved_articles": [],
+                "overlay_state": None
+            }
+
         # 1. Format chat history if present
         history_str = ""
         search_query = question
@@ -237,12 +261,7 @@ class RAGEngine:
             for num in article_numbers:
                 try:
                     exact_res = self.vector_store.get(
-                        where={
-                            "$and": [
-                                {"number": {"$eq": str(num)}},
-                                {"type": {"$eq": "article"}}
-                            ]
-                        }
+                        where={"number": {"$eq": str(num)}}
                     )
                     if exact_res and exact_res.get("documents"):
                         for doc_txt, doc_meta in zip(exact_res["documents"], exact_res["metadatas"]):
@@ -304,4 +323,5 @@ class RAGEngine:
             "answer": answer,
             "articles_cited": list(dict.fromkeys(articles_cited)),
             "retrieved_articles": retrieved_articles,
+            "overlay_state": None,
         }

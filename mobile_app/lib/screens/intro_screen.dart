@@ -17,7 +17,7 @@ class _IntroScreenState extends State<IntroScreen> {
   final List<Map<String, dynamic>> _onboardingData = [
     {
       'title': 'Samaneedhi AI',
-      'subtitle': 'A professional AI search tool for the Constitution and Indian Laws.',
+      'subtitle': 'A Product by ProVeloce\n\nA professional AI search tool for the Constitution and Indian Laws.',
       'icon': Icons.gavel,
       'description': 'Search constitutional and criminal laws in plain English and retrieve answers instantly.',
     },

@@ -306,6 +306,15 @@ class _SignupScreenState extends State<SignupScreen>
                             color: Color(0xFF0F172A),
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'A Product by ProVeloce',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black45,
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         Text(
                           _authenticated

@@ -227,6 +227,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   color: Colors.black87,
                 ),
               ),
+              const SizedBox(height: 4),
+              const Text(
+                'A Product by ProVeloce',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black45,
+                ),
+              ),
               const SizedBox(height: 6),
               const Text(
                 'Indian Constitution & Laws Query Portal',

@@ -46,6 +46,7 @@ class AskResponse(BaseModel):
     answer: str
     articles_cited: list[str]
     retrieved_articles: list[ArticleDetail] = []
+    overlay_state: str | None = None
 
 @app.get("/")
 def health_check():
