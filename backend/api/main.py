@@ -7,7 +7,7 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from pydantic import BaseModel, Field
 
 # Add parents to path
@@ -148,6 +148,12 @@ class AskResponse(BaseModel):
     articles_cited: list[str]
     retrieved_articles: list[ArticleDetail] = []
     overlay_state: str | None = None
+
+LOGO_PATH = Path(__file__).resolve().parents[1] / "proveloce_logo.svg"
+
+@app.get("/proveloce_logo.png")
+def get_logo():
+    return FileResponse(LOGO_PATH, media_type="image/svg+xml")
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def root():

@@ -48,9 +48,17 @@ class AskResponse(BaseModel):
     retrieved_articles: list[ArticleDetail] = []
     overlay_state: str | None = None
 
+from fastapi.responses import FileResponse
+
+LOGO_PATH = Path(__file__).resolve().parent / "proveloce_logo.svg"
+
 @app.get("/")
 def health_check():
     return {"status": "ok", "message": "RAG Assistant API is running"}
+
+@app.get("/proveloce_logo.png")
+def get_logo():
+    return FileResponse(LOGO_PATH, media_type="image/svg+xml")
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):

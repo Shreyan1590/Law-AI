@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/chat_message.dart';
 import '../services/api_service.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/proveloce_branding.dart';
 import '../services/auth_service.dart';
 import '../services/history_service.dart';
 import '../widgets/shimmer_loading.dart';
@@ -235,28 +236,27 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            AppLogo(size: 28, showShadow: false),
-            SizedBox(width: 10),
+            const AppLogo(size: 28, showShadow: false),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                const Text(
                   'Samaneedhi AI',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text(
-                  'A Product by ProVeloce',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.normal,
-                    color: Colors.white70, // Since AppBar has dark context/accent color
-                  ),
+                const ProVeloceBranding(
+                  logoHeight: 10,
+                  fontSize: 10,
+                  fontWeight: FontWeight.normal,
+                  textColor: Colors.white70,
+                  spacing: 3,
                 ),
               ],
             ),

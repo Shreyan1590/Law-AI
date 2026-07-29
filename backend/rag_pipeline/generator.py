@@ -12,6 +12,11 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
+BACKEND_BASE_URL = os.getenv(
+    "BACKEND_BASE_URL", "https://arasamaippu-ai-backend.onrender.com"
+).rstrip("/")
+PROVELOCE_LOGO_URL = f"{BACKEND_BASE_URL}/proveloce_logo.png"
+
 ARTICLE_REFERENCE_PATTERN = re.compile(
     r'\b(?:(?:(BNS|BNSS|BSA)\s+(?:section|sec\.?)\s*(\d+[A-Z]?))|(?:(?:section|sec\.?)\s*(\d+[A-Z]?)\s+of\s+(BNS|BNSS|BSA))|(?:(?:article|art\.?)\s*(\d+[A-Z]?)))\b',
     re.IGNORECASE,
@@ -369,7 +374,7 @@ def _fallback_general_answer(question: str) -> str:
     if GREETING_PATTERN.search(q):
         return (
             "Hi! I'm **Samaneedhi AI** - your friendly assistant for the Constitution of India and Indian Laws (BNS, BNSS, BSA).\n\n"
-            "*A Product by ProVeloce*\n\n"
+            f"![ProVeloce Logo]({PROVELOCE_LOGO_URL}) *A Product by ProVeloce*\n\n"
             "You can ask me things like:\n\n"
             "- \"What is Article 21?\"\n"
             "- \"What is BNS Section 15?\"\n"

@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/google_logo.dart';
 import '../widgets/success_overlay.dart';
+import '../widgets/proveloce_branding.dart';
 
 class SignupScreen extends StatefulWidget {
   final String? initialEmail;
@@ -307,14 +308,7 @@ class _SignupScreenState extends State<SignupScreen>
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'A Product by ProVeloce',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black45,
-                          ),
-                        ),
+                        const ProVeloceBranding(),
                         const SizedBox(height: 6),
                         Text(
                           _authenticated
